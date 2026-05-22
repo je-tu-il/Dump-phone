@@ -45,7 +45,7 @@ nonisolated struct LauncherEntry: TimelineEntry {
 
 nonisolated struct LauncherProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> LauncherEntry {
-        LauncherEntry(date: .now, configuration: nil)
+        LauncherEntry(date: .now, configuration: SharedWidgetReader.configurations().first)
     }
 
     func snapshot(for configuration: SelectLauncherStackIntent, in context: Context) async -> LauncherEntry {
@@ -53,7 +53,8 @@ nonisolated struct LauncherProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: SelectLauncherStackIntent, in context: Context) async -> Timeline<LauncherEntry> {
-        Timeline(entries: [LauncherEntry(date: .now, configuration: SharedWidgetReader.configuration(id: configuration.stack?.id))], policy: .after(.now.addingTimeInterval(900)))
+        let selected = SharedWidgetReader.configuration(id: configuration.stack?.id)
+        return Timeline(entries: [LauncherEntry(date: .now, configuration: selected)], policy: .after(.now.addingTimeInterval(300)))
     }
 }
 
@@ -64,7 +65,7 @@ struct StackLaunchWidgetView: View {
         ZStack {
             LinearGradient(colors: [Color(red: 0.02, green: 0.04, blue: 0.08), Color(red: 0.00, green: 0.16, blue: 0.20)], startPoint: .topLeading, endPoint: .bottomTrailing)
             if let configuration = entry.configuration {
-                VStack(alignment: horizontalAlignment(for: configuration.textAlignment), spacing: 8) {
+                VStack(alignment: horizontalAlignment(for: configuration.textAlignment), spacing: 7) {
                     Text(configuration.name)
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.cyan)
@@ -73,9 +74,10 @@ struct StackLaunchWidgetView: View {
                         if let url = URL(string: app.urlScheme) {
                             Link(destination: url) {
                                 HStack(spacing: 8) {
-                                    Image(systemName: app.symbolName)
-                                        .frame(width: 20)
-                                        .foregroundStyle(.orange)
+                                    if configuration.showIcon {
+                                        WidgetIconView(app: app)
+                                            .frame(width: 20, height: 20)
+                                    }
                                     Text(app.displayName)
                                         .font(.system(.callout, design: .rounded, weight: .semibold))
                                         .lineLimit(1)
@@ -120,6 +122,28 @@ struct StackLaunchWidgetView: View {
         case .center: return .center
         case .trailing: return .trailing
         }
+    }
+}
+
+private struct WidgetIconView: View {
+    let app: LauncherApplication
+
+    var body: some View {
+        Group {
+            if let iconURL = SharedWidgetReader.iconURL(fileName: app.iconFileName),
+               let image = UIImage(contentsOfFile: iconURL.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: app.symbolName)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.orange)
+                    .padding(2)
+            }
+        }
+        .clipShape(.rect(cornerRadius: 5))
     }
 }
 

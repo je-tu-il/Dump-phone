@@ -1,12 +1,16 @@
 import Foundation
 
 let appGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.stacklaunch"
+let widgetConfigurationsKey = "widgetConfigurations"
 
 nonisolated struct LauncherApplication: Codable, Identifiable, Hashable {
     let id: UUID
     var displayName: String
     var urlScheme: String
     var symbolName: String
+    var appStoreId: String?
+    var iconRemoteURL: String?
+    var iconFileName: String?
 }
 
 nonisolated enum TextAlignmentOption: String, Codable, CaseIterable, Identifiable {
@@ -22,6 +26,7 @@ nonisolated struct WidgetConfigurationList: Codable, Identifiable, Hashable {
     var applications: [LauncherApplication]
     var itemLimit: Int
     var textAlignment: TextAlignmentOption
+    var showIcon: Bool
 
     var visibleApplications: [LauncherApplication] {
         Array(applications.prefix(max(1, itemLimit)))
@@ -29,11 +34,9 @@ nonisolated struct WidgetConfigurationList: Codable, Identifiable, Hashable {
 }
 
 nonisolated enum SharedWidgetReader {
-    static let key = "widgetConfigurations"
-
     static func configurations() -> [WidgetConfigurationList] {
         let defaults = UserDefaults(suiteName: appGroupIdentifier) ?? .standard
-        guard let data = defaults.data(forKey: key),
+        guard let data = defaults.data(forKey: widgetConfigurationsKey),
               let decoded = try? JSONDecoder().decode([WidgetConfigurationList].self, from: data) else {
             return []
         }
@@ -44,5 +47,11 @@ nonisolated enum SharedWidgetReader {
         let all = configurations()
         guard let id, let uuid = UUID(uuidString: id) else { return all.first }
         return all.first(where: { $0.id == uuid }) ?? all.first
+    }
+
+    static func iconURL(fileName: String?) -> URL? {
+        guard let fileName,
+              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return nil }
+        return container.appendingPathComponent("DownloadedIcons", isDirectory: true).appendingPathComponent(fileName)
     }
 }
