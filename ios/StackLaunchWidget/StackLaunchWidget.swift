@@ -1,3 +1,4 @@
+// ios/StackLaunchWidget/StackLaunchWidget.swift
 import AppIntents
 import SwiftUI
 import WidgetKit
@@ -62,37 +63,35 @@ struct StackLaunchWidgetView: View {
     let entry: LauncherEntry
 
     var body: some View {
-        ZStack {
-            if let configuration = entry.configuration {
-                Color(hex: configuration.backgroundColorHex)
-                VStack(alignment: horizontalAlignment(for: configuration.textAlignment), spacing: 7) {
-                    Text(configuration.name)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.cyan)
-                        .frame(maxWidth: .infinity, alignment: frameAlignment(for: configuration.textAlignment))
-                    ForEach(configuration.visibleApplications) { app in
-                        if let url = URL(string: app.urlScheme) {
-                            Link(destination: url) {
-                                LauncherLinkRow(app: app, configuration: configuration)
-                            }
+        if let configuration = entry.configuration {
+            VStack(alignment: horizontalAlignment(for: configuration.textAlignment), spacing: 7) {
+                Text(configuration.name)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.cyan)
+                    .frame(maxWidth: .infinity, alignment: frameAlignment(for: configuration.textAlignment))
+                ForEach(configuration.visibleApplications) { app in
+                    if let url = URL(string: app.urlScheme) {
+                        Link(destination: url) {
+                            LauncherLinkRow(app: app, configuration: configuration)
                         }
                     }
-                    Spacer(minLength: 0)
                 }
-                .padding(14)
-            } else {
-                Color(red: 0.02, green: 0.04, blue: 0.08)
-                VStack(spacing: 8) {
-                    Image(systemName: "rectangle.stack.badge.plus")
-                        .font(.title2)
-                        .foregroundStyle(.orange)
-                    Text("Create a stack in StackLaunch")
-                        .font(.caption.weight(.semibold))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.white)
-                }
-                .padding()
+                Spacer(minLength: 0)
             }
+            .padding(14)
+            .containerBackground(Color(hex: configuration.backgroundColorHex), for: .widget)
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "rectangle.stack.badge.plus")
+                    .font(.title2)
+                    .foregroundStyle(.orange)
+                Text("Create a stack in StackLaunch")
+                    .font(.caption.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white)
+            }
+            .padding()
+            .containerBackground(Color(red: 0.02, green: 0.04, blue: 0.08), for: .widget)
         }
     }
 
@@ -183,7 +182,6 @@ struct StackLaunchWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: kind, intent: SelectLauncherStackIntent.self, provider: LauncherProvider()) { entry in
             StackLaunchWidgetView(entry: entry)
-                .containerBackground(.clear, for: .widget)
         }
         .configurationDisplayName("StackLaunch")
         .description("Display one of your saved launcher stacks.")

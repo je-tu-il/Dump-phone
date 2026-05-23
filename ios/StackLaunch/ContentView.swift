@@ -1,3 +1,4 @@
+// ios/StackLaunch/ContentView.swift
 import SwiftUI
 import WidgetKit
 
@@ -132,7 +133,7 @@ private struct AddFromLibraryView: View {
     @State private var searchText = ""
     @FocusState private var focused: Bool
     private var filtered: [LauncherApplication] { searchText.isEmpty ? store.library : store.library.filter { $0.displayName.localizedStandardContains(searchText) || ($0.appStoreId?.contains(searchText) ?? false) } }
-    var body: some View { NavigationStack { List { TextField("Search library", text: $searchText).focused($focused).onSubmit { focused = false }; ForEach(filtered) { app in Button { onAdd(app) } label: { HStack { AppIconPreview(app: app).frame(width: 30, height: 30); Text(app.displayName); Spacer(); Image(systemName: selectedIds.contains(app.id) ? "checkmark.circle.fill" : "plus.circle") } }.disabled(selectedIds.contains(app.id)) } }.navigationTitle("Add from Library").toolbar { Button("Done") { dismiss() } } } }
+    var body: some View { NavigationStack { List { TextField("Search library", text: $searchText).focused($focused).onSubmit { focused = false }; ForEach(filtered) { app in Button { onAdd(app); dismiss() } label: { HStack { AppIconPreview(app: app).frame(width: 30, height: 30); Text(app.displayName); Spacer(); Image(systemName: selectedIds.contains(app.id) ? "checkmark.circle.fill" : "plus.circle") } }.disabled(selectedIds.contains(app.id)) } }.navigationTitle("Add from Library").toolbar { Button("Done") { dismiss() } } } }
 }
 
 private struct AddAppLookupView: View {
@@ -148,8 +149,8 @@ private struct AddAppLookupView: View {
     enum Field: Hashable { case lookup, search }
     private var filteredApps: [PredefinedApp] { searchText.isEmpty ? PredefinedAppsDatabase.all : PredefinedAppsDatabase.all.filter { $0.name.localizedStandardContains(searchText) || $0.appStoreId.localizedStandardContains(searchText) } }
     var body: some View { NavigationStack { List { Section { TextField("Paste App Store URL or ID", text: $input).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focusedField, equals: .lookup).submitLabel(.search).onSubmit { Task { await lookupAndAdd() } }; Button { Task { await lookupAndAdd() } } label: { isLoading ? AnyView(ProgressView()) : AnyView(Label("Fetch from iTunes Search API", systemImage: "icloud.and.arrow.down.fill")) }.disabled(isLoading || ITunesAppLookupService.extractAppStoreId(from: input).isEmpty); Button("How to find an App ID?") { showingTutorial = true } } footer: { Text(errorMessage ?? "Artwork is downsampled and saved to the shared App Group for widget access.") }
-            Section("Predefined apps") { TextField("Search known apps", text: $searchText).focused($focusedField, equals: .search).onSubmit { focusedField = nil }; ForEach(filteredApps) { predefined in Button { onAdd(predefined.launcherApplication) } label: { Label(predefined.name, systemImage: predefined.iconName ?? "app.fill") } } } }.navigationTitle("Add App").toolbar { Button("Done") { dismiss() } }.alert("How to find an App ID", isPresented: $showingTutorial) { Button("Got it", role: .cancel) {} } message: { Text("Open an App Store link and look for the number after /id. In apps.apple.com/app/name/id123456789, the App ID is 123456789.") } } }
-    private func lookupAndAdd() async { focusedField = nil; isLoading = true; errorMessage = nil; do { onAdd(try await lookupService.lookup(input: input)); input = "" } catch { errorMessage = "Could not fetch that app. Check the ID or URL and try again." }; isLoading = false }
+            Section("Predefined apps") { TextField("Search known apps", text: $searchText).focused($focusedField, equals: .search).onSubmit { focusedField = nil }; ForEach(filteredApps) { predefined in Button { onAdd(predefined.launcherApplication); dismiss() } label: { Label(predefined.name, systemImage: predefined.iconName ?? "app.fill") } } } }.navigationTitle("Add App").toolbar { Button("Done") { dismiss() } }.alert("How to find an App ID", isPresented: $showingTutorial) { Button("Got it", role: .cancel) {} } message: { Text("Open an App Store link and look for the number after /id. In apps.apple.com/app/name/id123456789, the App ID is 123456789.") } } }
+    private func lookupAndAdd() async { focusedField = nil; isLoading = true; errorMessage = nil; do { onAdd(try await lookupService.lookup(input: input)); input = ""; dismiss() } catch { errorMessage = "Could not fetch that app. Check the ID or URL and try again." }; isLoading = false }
 }
 
 private struct BulkImportView: View {
