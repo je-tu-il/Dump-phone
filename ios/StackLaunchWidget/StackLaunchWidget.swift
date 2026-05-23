@@ -1,25 +1,57 @@
+// ios/StackLaunchWidget/StackLaunchWidget.swift
 import AppIntents
 import SwiftUI
 import WidgetKit
 
+let widgetAppGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.stacklaunch"
+
+// MARK: - Système de Diagnostic Isolé tout seul
+struct WidgetLogger {
+    static func log(_ message: String) {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: widgetAppGroupIdentifier) else { return }
+        let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        let entry = "[\(formatter.string(from: Date()))] WIDGET: \(message)\n"
+        
+        if let data = entry.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logFile.path) {
+                if let handle = try? FileHandle(forWritingTo: logFile) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                }
+            } else {
+                try? data.write(to: logFile)
+            }
+        }
+    }
+    
+    static func read() -> String {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: widgetAppGroupIdentifier) else { return "Err: No App Group Container" }
+        let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
+        return (try? String(contentsOf: logFile)) ?? "Err: No logs readable"
+    }
+}
+
 // MARK: - Widget Data Reader Sécurisé
 struct WidgetDataReader {
     static var defaults: UserDefaults? {
-        UserDefaults(suiteName: appGroupIdentifier)
+        UserDefaults(suiteName: widgetAppGroupIdentifier)
     }
 
     static func configurations() -> [WidgetConfigurationList] {
-        SharedLogger.log("WidgetDataReader reading configs")
-        guard let data = defaults?.data(forKey: widgetConfigurationsKey) else {
-            SharedLogger.log("Err: No data for key \(widgetConfigurationsKey)")
+        WidgetLogger.log("WidgetDataReader reading configs")
+        guard let data = defaults?.data(forKey: "widgetConfigurations") else {
+            WidgetLogger.log("Err: No data for key widgetConfigurations")
             return []
         }
         do {
             let decoded = try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
-            SharedLogger.log("WidgetDataReader decoded \(decoded.count) configs")
+            WidgetLogger.log("WidgetDataReader decoded \(decoded.count) configs")
             return decoded
         } catch {
-            SharedLogger.log("WidgetDataReader Decode Err: \(error.localizedDescription)")
+            WidgetLogger.log("WidgetDataReader Decode Err: \(error.localizedDescription)")
             return []
         }
     }
@@ -27,6 +59,15 @@ struct WidgetDataReader {
     static func configuration(id: String?) -> WidgetConfigurationList? {
         guard let id = id else { return configurations().first }
         return configurations().first(where: { $0.id.uuidString == id })
+    }
+
+    static func getIconURL(fileName: String?) -> URL? {
+        guard let fileName = fileName, !fileName.isEmpty,
+              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: widgetAppGroupIdentifier) else { 
+            return nil 
+        }
+        let url = container.appendingPathComponent("DownloadedIcons").appendingPathComponent(fileName)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 }
 
@@ -51,10 +92,10 @@ struct LauncherStackQuery: EntityQuery {
     }
 
     func suggestedEntities() async throws -> [LauncherStackEntity] {
-        SharedLogger.log("Intent requested suggestedEntities")
+        WidgetLogger.log("Intent requested suggestedEntities")
         let configs = WidgetDataReader.configurations()
         if configs.isEmpty {
-            SharedLogger.log("Intent found no configs, returning fallback")
+            WidgetLogger.log("Intent found no configs, returning fallback")
             return [LauncherStackEntity(id: "empty_fallback", name: "⚠️ Create a stack in the app")]
         }
         return configs.map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
@@ -89,9 +130,9 @@ struct LauncherProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: SelectLauncherStackIntent, in context: Context) async -> Timeline<LauncherEntry> {
-        SharedLogger.log("Widget timeline requested")
+        WidgetLogger.log("Widget timeline requested")
         let selected = WidgetDataReader.configuration(id: configuration.stack?.id)
-        if selected == nil { SharedLogger.log("Timeline selected config is nil") }
+        if selected == nil { WidgetLogger.log("Timeline selected config is nil") }
         return Timeline(entries: [LauncherEntry(date: .now, configuration: selected)], policy: .after(.now.addingTimeInterval(300)))
     }
 }
@@ -125,7 +166,7 @@ struct StackLaunchWidgetView: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.red)
                 ScrollView {
-                    Text(SharedLogger.read())
+                    Text(WidgetLogger.read())
                         .font(.system(size: 8))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .multilineTextAlignment(.leading)
@@ -184,7 +225,8 @@ private struct WidgetIconView: View {
 
     var body: some View {
         Group {
-            if let image = loadImage() {
+            if let iconURL = WidgetDataReader.getIconURL(fileName: app.iconFileName),
+               let image = UIImage(contentsOfFile: iconURL.path) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -203,12 +245,6 @@ private struct WidgetIconView: View {
             if style == .liquidGlass { RoundedRectangle(cornerRadius: 6).stroke(.white.opacity(0.36), lineWidth: 0.7) }
         }
         .clipShape(.rect(cornerRadius: 5))
-    }
-
-    private func loadImage() -> UIImage? {
-        guard let fileName = app.iconFileName, let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return nil }
-        let url = container.appendingPathComponent("DownloadedIcons").appendingPathComponent(fileName)
-        return UIImage(contentsOfFile: url.path)
     }
 }
 
