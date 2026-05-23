@@ -113,7 +113,6 @@ struct ConfigurationEditor: View {
 private struct LibraryView: View {
     @ObservedObject var store: SharedConfigurationStore
     @State private var showingAddApp = false
-    @State private var CavalierBulk = false
     @State private var showingBulk = false
     var body: some View {
         List {
@@ -121,10 +120,14 @@ private struct LibraryView: View {
                 Button { showingAddApp = true } label: { Label("Fetch from Catalog", systemImage: "icloud.and.arrow.down.fill") }
                 Button { showingBulk = true } label: { Label("Bulk import App Store IDs", systemImage: "square.and.arrow.down.on.square.fill") } 
             }
-            Section("My Saved Library Apps") { ForEach(store.library) { app in SelectedApplicationRow(app: app, store: store) }.onDelete(perform: store.deleteFromLibrary) }
+            Section("My Saved Library Apps") { 
+                ForEach(store.library) { app in 
+                    SelectedApplicationRow(app: app, store: store) 
+                }
+                .onDelete(perform: store.deleteFromLibrary)
+            }
         }
         .navigationTitle("App Library")
-        .toolbar { EditButton() }
         .sheet(isPresented: $showingAddApp) { AddAppLookupView { store.addToLibrary($0) } }
         .sheet(isPresented: $showingBulk) { BulkImportView(store: store) }
     }

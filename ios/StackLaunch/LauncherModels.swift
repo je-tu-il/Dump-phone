@@ -4,7 +4,6 @@ import Foundation
 import ImageIO
 import SwiftUI
 import UIKit
-import os
 import WidgetKit
 
 let appGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.stacklaunch"
@@ -29,7 +28,7 @@ nonisolated enum IconStyle: String, Codable, CaseIterable, Identifiable {
 }
 
 nonisolated struct LauncherApplication: Codable, Identifiable, Hashable {
-    let id: UUID
+    var id: UUID // Modifié de 'let' à 'var' pour forcer le renouvellement d'identité
     var displayName: String
     var urlScheme: String
     var symbolName: String
@@ -190,7 +189,7 @@ final class ITunesAppLookupService {
         let iconURLString = app.artworkUrl512 ?? app.artworkUrl100
         var iconFileName: String?
         if let iconURLString, let iconURL = URL(string: iconURLString) {
-            iconFileName = try await SharedIconStorage.saveIcon(from: iconURL, appStoreId: String(app.trackId))
+            iconFileName = try? await SharedIconStorage.saveIcon(from: iconURL, appStoreId: String(app.trackId))
         }
         return LauncherApplication(displayName: app.trackName, urlScheme: app.trackViewUrl ?? "https://apps.apple.com/app/id\(app.trackId)", appStoreId: String(app.trackId), iconRemoteURL: iconURLString, iconFileName: iconFileName)
     }
@@ -221,10 +220,14 @@ final class SharedConfigurationStore: ObservableObject {
     @Published var configurations: [WidgetConfigurationList] = []
     @Published var library: [LauncherApplication] = []
     private let defaults: UserDefaults
-    private let logger = Logger(subsystem: "app.rork.stacklaunch", category: "SharedConfigurationStore")
 
-    init(defaults: UserDefaults = UserDefaults(suiteName: appGroupIdentifier) ?? .standard) {
-        self.defaults = defaults
+    init() {
+        if let groupDefaults = UserDefaults(suiteName: appGroupIdentifier) {
+            self.defaults = groupDefaults
+        } else {
+            print("CRITICAL: App Group non configuré. Fallback sur .standard. Le Widget sera déconnecté des données.")
+            self.defaults = .standard
+        }
         load()
     }
 
@@ -243,26 +246,21 @@ final class SharedConfigurationStore: ObservableObject {
     }
 
     func addToLibrary(_ app: LauncherApplication) {
-        guard !library.contains(where: { $0.appStoreId == app.appStoreId && $0.displayName == app.displayName }) else {
-            logger.info("Skipped duplicate: \(app.displayName)")
-            return
-        }
-        let copy = LauncherApplication(id: UUID(), displayName: app.displayName, urlScheme: app.urlScheme, symbolName: app.symbolName, appStoreId: app.appStoreId, iconRemoteURL: app.iconRemoteURL, iconFileName: app.iconFileName, textColorHex: app.textColorHex)
-        library.append(copy)
+        guard !library.contains(where: { $0.appStoreId == app.appStoreId && $0.displayName == app.displayName }) else { return }
+        var newEntry = app
+        newEntry.id = UUID() // Renouvellement strict de l'UUID pour forcer le rendu SwiftUI
+        library.append(newEntry)
         library.sort { $0.displayName < $1.displayName }
         save()
-        logger.info("Added to library: \(copy.displayName) (\(copy.id))")
     }
 
     func addBulkToLibrary(_ apps: [LauncherApplication]) {
-        for app in apps {
-            guard !library.contains(where: { $0.appStoreId == app.appStoreId && $0.displayName == app.displayName }) else { continue }
-            let copy = LauncherApplication(id: UUID(), displayName: app.displayName, urlScheme: app.urlScheme, symbolName: app.symbolName, appStoreId: app.appStoreId, iconRemoteURL: app.iconRemoteURL, iconFileName: app.iconFileName, textColorHex: app.textColorHex)
-            library.append(copy)
-        }
-        library.sort { $0.displayName < $1.displayName }
+        for app in apps { addToLibrary(app) }
+    }
+
+    func deleteFromLibrary(at offsets: IndexSet) {
+        library.remove(atOffsets: offsets)
         save()
-        logger.info("Bulk added \(apps.count) apps, library now \(self.library.count)")
     }
 
     func updateLibraryApp(_ app: LauncherApplication) {
@@ -288,17 +286,6 @@ final class SharedConfigurationStore: ObservableObject {
         save()
     }
 
-    func deleteFromLibrary(at offsets: IndexSet) {
-        let idsToRemove = Set(offsets.map { library[$0].id })
-        library.remove(atOffsets: offsets)
-        for i in configurations.indices {
-            configurations[i].applicationIds.removeAll { idsToRemove.contains($0) }
-            configurations[i].applications.removeAll { idsToRemove.contains($0.id) }
-        }
-        save()
-        logger.info("Deleted \(idsToRemove.count) apps from library")
-    }
-
     private func hydrated(_ configuration: WidgetConfigurationList) -> WidgetConfigurationList {
         var copy = configuration
         copy.itemLimit = min(maxAppsPerStack, max(1, copy.itemLimit))
@@ -312,7 +299,7 @@ final class SharedConfigurationStore: ObservableObject {
         do {
             return try JSONDecoder().decode(type, from: data)
         } catch {
-            logger.error("Decode FAILED for key '\(key)': \(error.localizedDescription)")
+            print("Erreur de décodage pour \(key): \(error)")
             return nil
         }
     }
@@ -322,7 +309,7 @@ final class SharedConfigurationStore: ObservableObject {
             let data = try JSONEncoder().encode(value)
             defaults.set(data, forKey: key)
         } catch {
-            logger.error("Encode FAILED for key '\(key)': \(error.localizedDescription)")
+            print("Erreur d'encodage pour \(key): \(error)")
         }
     }
 }
