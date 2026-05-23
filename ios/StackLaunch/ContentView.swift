@@ -239,8 +239,8 @@ struct AppCatalogView: View {
 
     var body: some View {
         List {
-            ForEach(filteredApps) { app in
-                let inLibrary = store.isInLibrary(app)
+ForEach(filteredApps, id: \.id) { app in
+    let inLibrary = store.isInLibrary(app)
                 let isSelected = selectedIds.contains(app.id)
                 Button {
                     if !inLibrary {
