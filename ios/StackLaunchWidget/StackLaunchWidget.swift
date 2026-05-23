@@ -63,8 +63,8 @@ struct StackLaunchWidgetView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.02, green: 0.04, blue: 0.08), Color(red: 0.00, green: 0.16, blue: 0.20)], startPoint: .topLeading, endPoint: .bottomTrailing)
             if let configuration = entry.configuration {
+                Color(hex: configuration.backgroundColorHex)
                 VStack(alignment: horizontalAlignment(for: configuration.textAlignment), spacing: 7) {
                     Text(configuration.name)
                         .font(.caption.weight(.bold))
@@ -73,20 +73,7 @@ struct StackLaunchWidgetView: View {
                     ForEach(configuration.visibleApplications) { app in
                         if let url = URL(string: app.urlScheme) {
                             Link(destination: url) {
-                                HStack(spacing: 8) {
-                                    if configuration.showIcon {
-                                        WidgetIconView(app: app)
-                                            .frame(width: 20, height: 20)
-                                    }
-                                    Text(app.displayName)
-                                        .font(.system(.callout, design: .rounded, weight: .semibold))
-                                        .lineLimit(1)
-                                    Spacer(minLength: 0)
-                                }
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
-                                .background(.white.opacity(0.10), in: .rect(cornerRadius: 12))
+                                LauncherLinkRow(app: app, configuration: configuration)
                             }
                         }
                     }
@@ -94,6 +81,7 @@ struct StackLaunchWidgetView: View {
                 }
                 .padding(14)
             } else {
+                Color(red: 0.02, green: 0.04, blue: 0.08)
                 VStack(spacing: 8) {
                     Image(systemName: "rectangle.stack.badge.plus")
                         .font(.title2)
@@ -125,8 +113,42 @@ struct StackLaunchWidgetView: View {
     }
 }
 
+private struct LauncherLinkRow: View {
+    let app: LauncherApplication
+    let configuration: WidgetConfigurationList
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if configuration.showIcon {
+                WidgetIconView(app: app, style: configuration.iconStyle)
+                    .frame(width: 20, height: 20)
+            }
+            Text(app.displayName)
+                .font(.system(.callout, design: .rounded, weight: .semibold))
+                .foregroundStyle(Color(hex: app.textColorHex))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(rowBackground)
+    }
+
+    @ViewBuilder
+    private var rowBackground: some View {
+        if configuration.iconStyle == .liquidGlass {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.26), lineWidth: 0.8))
+        } else {
+            RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.10))
+        }
+    }
+}
+
 private struct WidgetIconView: View {
     let app: LauncherApplication
+    let style: IconStyle
 
     var body: some View {
         Group {
@@ -141,6 +163,14 @@ private struct WidgetIconView: View {
                     .scaledToFit()
                     .foregroundStyle(.orange)
                     .padding(2)
+            }
+        }
+        .grayscale(style == .grayscale ? 1 : 0)
+        .padding(style == .liquidGlass ? 2 : 0)
+        .background(style == .liquidGlass ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(.clear), in: .rect(cornerRadius: 6))
+        .overlay {
+            if style == .liquidGlass {
+                RoundedRectangle(cornerRadius: 6).stroke(.white.opacity(0.36), lineWidth: 0.7)
             }
         }
         .clipShape(.rect(cornerRadius: 5))
