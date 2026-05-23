@@ -1,4 +1,4 @@
-name: Build unsigned IPA
+name: Build unsigned IPA (Compilation Check Only)
 
 on:
   push:
@@ -11,6 +11,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Avertissement de Sécurité iOS
+        run: |
+          echo "⚠️ ATTENTION: Cet IPA est compilé sans signature (Unsigned)."
+          echo "Les fonctionnalités liées à l'App Group et au WidgetKit nécessitent obligatoirement des Entitlements signés."
+          echo "Si vous installez cet IPA via TrollStore ou AltStore, le Widget a 99% de chances d'afficher un écran blanc car le système Sandbox d'iOS bloquera UserDefaults(suiteName:)."
 
       - name: Build app without signing
         run: |
@@ -28,10 +34,10 @@ jobs:
         run: |
           mkdir -p Payload
           cp -r build_output/Build/Products/Release-iphoneos/StackLaunch.app Payload/
-          zip -r StackLaunch.ipa Payload
+          zip -r StackLaunch-unsigned.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: StackLaunch-unsigned
-          path: StackLaunch.ipa
+          path: StackLaunch-unsigned.ipa

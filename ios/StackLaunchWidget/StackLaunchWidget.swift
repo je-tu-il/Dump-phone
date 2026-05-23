@@ -1,8 +1,8 @@
-// ios/StackLaunchWidget/StackLaunchWidget.swift
 import AppIntents
 import SwiftUI
 import WidgetKit
 
+// Sécurisation de l'AppIntent : S'il n'y a pas de données, on renvoie une entité "Vide"
 nonisolated struct LauncherStackEntity: AppEntity {
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Launcher Stack"
     static var defaultQuery = LauncherStackQuery()
@@ -11,30 +11,29 @@ nonisolated struct LauncherStackEntity: AppEntity {
     let name: String
 
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(name)")
+        DisplayRepresentation(title: LocalizedStringResource(stringLiteral: name))
     }
 }
 
 nonisolated struct LauncherStackQuery: EntityQuery {
-    func entities(for identifiers: [String]) async -> [LauncherStackEntity] {
+    func entities(for identifiers: [String]) async throws -> [LauncherStackEntity] {
         SharedWidgetReader.configurations()
             .filter { identifiers.contains($0.id.uuidString) }
             .map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
     }
 
-    func suggestedEntities() async -> [LauncherStackEntity] {
+    func suggestedEntities() async throws -> [LauncherStackEntity] {
         let configs = SharedWidgetReader.configurations()
-        guard !configs.isEmpty else {
-            return [LauncherStackEntity(id: "00000000-0000-0000-0000-000000000000", name: "Create a stack in the app")]
+        if configs.isEmpty {
+            // Empêche le menu "Edit Widget" de crasher s'il n'y a pas de pile
+            return [LauncherStackEntity(id: "empty_fallback", name: "⚠️ Create a stack in the app")]
         }
         return configs.map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
     }
 
     func defaultResult() async -> LauncherStackEntity? {
-        if let first = SharedWidgetReader.configurations().first {
-            return LauncherStackEntity(id: first.id.uuidString, name: first.name)
-        }
-        return LauncherStackEntity(id: "00000000-0000-0000-0000-000000000000", name: "Create a stack in the app")
+        guard let first = SharedWidgetReader.configurations().first else { return nil }
+        return LauncherStackEntity(id: first.id.uuidString, name: first.name)
     }
 }
 
@@ -70,12 +69,13 @@ struct StackLaunchWidgetView: View {
     let entry: LauncherEntry
 
     var body: some View {
-        if let configuration = entry.configuration {
+        if let configuration = entry.configuration, !configuration.id.uuidString.contains("empty") {
             VStack(alignment: horizontalAlignment(for: configuration.textAlignment), spacing: 7) {
                 Text(configuration.name)
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.cyan)
                     .frame(maxWidth: .infinity, alignment: frameAlignment(for: configuration.textAlignment))
+                
                 ForEach(configuration.visibleApplications) { app in
                     if let url = URL(string: app.urlScheme) {
                         Link(destination: url) {
@@ -89,10 +89,10 @@ struct StackLaunchWidgetView: View {
             .containerBackground(Color(hex: configuration.backgroundColorHex), for: .widget)
         } else {
             VStack(spacing: 8) {
-                Image(systemName: "rectangle.stack.badge.plus")
+                Image(systemName: "exclamationmark.triangle.fill")
                     .font(.title2)
                     .foregroundStyle(.orange)
-                Text("Create a stack in StackLaunch")
+                Text("Long-press to Edit Widget\nor create a stack in the app.")
                     .font(.caption.weight(.semibold))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
@@ -103,19 +103,11 @@ struct StackLaunchWidgetView: View {
     }
 
     private func horizontalAlignment(for option: TextAlignmentOption) -> HorizontalAlignment {
-        switch option {
-        case .leading: return .leading
-        case .center: return .center
-        case .trailing: return .trailing
-        }
+        switch option { case .leading: return .leading; case .center: return .center; case .trailing: return .trailing }
     }
 
     private func frameAlignment(for option: TextAlignmentOption) -> Alignment {
-        switch option {
-        case .leading: return .leading
-        case .center: return .center
-        case .trailing: return .trailing
-        }
+        switch option { case .leading: return .leading; case .center: return .center; case .trailing: return .trailing }
     }
 }
 
@@ -158,7 +150,8 @@ private struct WidgetIconView: View {
 
     var body: some View {
         Group {
-            if let iconURL = SharedWidgetReader.iconURL(fileName: app.iconFileName),
+            // Utilisation du SharedWidgetReader pour récupérer l'image partagée
+            if let iconURL = SharedWidgetReader.getIconURL(fileName: app.iconFileName),
                let image = UIImage(contentsOfFile: iconURL.path) {
                 Image(uiImage: image)
                     .resizable()
@@ -175,9 +168,7 @@ private struct WidgetIconView: View {
         .padding(style == .liquidGlass ? 2 : 0)
         .background(style == .liquidGlass ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(.clear), in: .rect(cornerRadius: 6))
         .overlay {
-            if style == .liquidGlass {
-                RoundedRectangle(cornerRadius: 6).stroke(.white.opacity(0.36), lineWidth: 0.7)
-            }
+            if style == .liquidGlass { RoundedRectangle(cornerRadius: 6).stroke(.white.opacity(0.36), lineWidth: 0.7) }
         }
         .clipShape(.rect(cornerRadius: 5))
     }
@@ -191,7 +182,7 @@ struct StackLaunchWidget: Widget {
             StackLaunchWidgetView(entry: entry)
         }
         .configurationDisplayName("StackLaunch")
-        .description("Display one of your saved launcher stacks.")
+        .description("Display your application stacks.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }

@@ -1,4 +1,3 @@
-// ios/StackLaunch/LauncherModels.swift
 import Combine
 import Foundation
 import ImageIO
@@ -11,24 +10,15 @@ let widgetConfigurationsKey = "widgetConfigurations"
 let appLibraryKey = "globalAppLibrary"
 let maxAppsPerStack = 10
 
+// MARK: - Modèles de données
 nonisolated enum IconStyle: String, Codable, CaseIterable, Identifiable {
-    case standard
-    case grayscale
-    case liquidGlass
-
+    case standard, grayscale, liquidGlass
     var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .standard: return "Standard"
-        case .grayscale: return "Grayscale"
-        case .liquidGlass: return "Liquid Glass"
-        }
-    }
+    var title: String { rawValue.capitalized }
 }
 
 nonisolated struct LauncherApplication: Codable, Identifiable, Hashable {
-    var id: UUID // Modifié de 'let' à 'var' pour forcer le renouvellement d'identité
+    var id: UUID // 'var' obligatoire pour forcer le rafraîchissement UI
     var displayName: String
     var urlScheme: String
     var symbolName: String
@@ -50,18 +40,10 @@ nonisolated struct LauncherApplication: Codable, Identifiable, Hashable {
 }
 
 nonisolated enum TextAlignmentOption: String, Codable, CaseIterable, Identifiable {
-    case leading
-    case center
-    case trailing
-
+    case leading, center, trailing
     var id: String { rawValue }
-
     var title: String {
-        switch self {
-        case .leading: return "Left"
-        case .center: return "Center"
-        case .trailing: return "Right"
-        }
+        switch self { case .leading: return "Left"; case .center: return "Center"; case .trailing: return "Right" }
     }
 }
 
@@ -76,10 +58,10 @@ nonisolated struct WidgetConfigurationList: Codable, Identifiable, Hashable {
     var backgroundColorHex: String
     var iconStyle: IconStyle
 
-    init(id: UUID = UUID(), name: String, applicationIds: [UUID] = [], applications: [LauncherApplication] = [], itemLimit: Int, textAlignment: TextAlignmentOption, showIcon: Bool = true, backgroundColorHex: String = "#07131F", iconStyle: IconStyle = .standard) {
+    init(id: UUID = UUID(), name: String, applicationIds: [UUID] = [], applications: [LauncherApplication] = [], itemLimit: Int = 4, textAlignment: TextAlignmentOption = .leading, showIcon: Bool = true, backgroundColorHex: String = "#07131F", iconStyle: IconStyle = .standard) {
         self.id = id
         self.name = name
-        self.applicationIds = applicationIds.isEmpty ? applications.map(\.id) : applicationIds
+        self.applicationIds = applicationIds
         self.applications = applications
         self.itemLimit = min(max(1, itemLimit), maxAppsPerStack)
         self.textAlignment = textAlignment
@@ -87,171 +69,97 @@ nonisolated struct WidgetConfigurationList: Codable, Identifiable, Hashable {
         self.backgroundColorHex = backgroundColorHex
         self.iconStyle = iconStyle
     }
-
+    
     var visibleApplications: [LauncherApplication] {
         Array(applications.prefix(min(maxAppsPerStack, max(1, itemLimit))))
     }
 }
 
-extension Color {
-    init(hex: String) {
-        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var value: UInt64 = 0
-        Scanner(string: cleaned).scanHexInt64(&value)
-        let r: Double
-        let g: Double
-        let b: Double
-        switch cleaned.count {
-        case 6:
-            r = Double((value >> 16) & 0xFF) / 255
-            g = Double((value >> 8) & 0xFF) / 255
-            b = Double(value & 0xFF) / 255
-        default:
-            r = 1; g = 1; b = 1
-        }
-        self.init(red: r, green: g, blue: b)
+// MARK: - Helper de lecture partagée (Utilisé par le Widget)
+struct SharedWidgetReader {
+    static var defaults: UserDefaults? {
+        UserDefaults(suiteName: appGroupIdentifier)
     }
 
-    func hexString() -> String {
-        let uiColor = UIColor(self)
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        uiColor.getRed(&red, green: &green, blue: &blue, alpha: nil)
-        return String(format: "#%02X%02X%02X", Int(red * 255), Int(green * 255), Int(blue * 255))
+    static func configurations() -> [WidgetConfigurationList] {
+        guard let data = defaults?.data(forKey: widgetConfigurationsKey) else { return [] }
+        do {
+            return try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
+        } catch {
+            print("Widget Reader Error: \(error)")
+            return []
+        }
+    }
+    
+    static func configuration(id: String?) -> WidgetConfigurationList? {
+        guard let id = id else { return configurations().first }
+        return configurations().first(where: { $0.id.uuidString == id })
+    }
+
+    static func getIconURL(fileName: String?) -> URL? {
+        guard let fileName = fileName,
+              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return nil }
+        return container.appendingPathComponent("DownloadedIcons").appendingPathComponent(fileName)
     }
 }
 
-@MainActor
-enum SharedIconStorage {
-    static func containerURL() -> URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)
-    }
-
-    static func iconsDirectoryURL() throws -> URL {
-        guard let container = containerURL() else { throw URLError(.cannotCreateFile) }
-        let directory = container.appendingPathComponent("DownloadedIcons", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
-    }
-
-    static func saveIcon(from remoteURL: URL, appStoreId: String) async throws -> String {
-        let (data, response) = try await URLSession.shared.data(from: remoteURL)
-        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
-            throw URLError(.badServerResponse)
-        }
-        guard let downsampled = downsample(imageData: data, maxPixelSize: 96) else { throw URLError(.cannotDecodeContentData) }
-        let fileName = "app-icon-\(appStoreId).jpg"
-        let destination = try iconsDirectoryURL().appendingPathComponent(fileName)
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
-        }
-        try downsampled.write(to: destination, options: .atomic)
-        return fileName
-    }
-
-    private static func downsample(imageData: Data, maxPixelSize: CGFloat) -> Data? {
-        let options = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithData(imageData as CFData, options) else { return nil }
-        let downsampleOptions = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-        ] as CFDictionary
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions) else { return nil }
-        let image = UIImage(cgImage: cgImage)
-        return image.jpegData(compressionQuality: 0.72)
-    }
-}
-
-nonisolated struct ITunesLookupResponse: Decodable {
-    let results: [ITunesAppResult]
-}
-
-nonisolated struct ITunesAppResult: Decodable {
-    let trackName: String
-    let trackId: Int
-    let artworkUrl512: String?
-    let artworkUrl100: String?
-    let trackViewUrl: String?
-}
-
-@MainActor
-final class ITunesAppLookupService {
-    func lookup(input: String) async throws -> LauncherApplication {
-        let appId = Self.extractAppStoreId(from: input)
-        guard !appId.isEmpty, let url = URL(string: "https://itunes.apple.com/lookup?id=\(appId)") else { throw URLError(.badURL) }
-        let (data, response) = try await URLSession.shared.data(from: url)
-        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else { throw URLError(.badServerResponse) }
-        let decoded = try JSONDecoder().decode(ITunesLookupResponse.self, from: data)
-        guard let app = decoded.results.first else { throw URLError(.resourceUnavailable) }
-        let iconURLString = app.artworkUrl512 ?? app.artworkUrl100
-        var iconFileName: String?
-        if let iconURLString, let iconURL = URL(string: iconURLString) {
-            iconFileName = try? await SharedIconStorage.saveIcon(from: iconURL, appStoreId: String(app.trackId))
-        }
-        return LauncherApplication(displayName: app.trackName, urlScheme: app.trackViewUrl ?? "https://apps.apple.com/app/id\(app.trackId)", appStoreId: String(app.trackId), iconRemoteURL: iconURLString, iconFileName: iconFileName)
-    }
-
-    static func extractAppStoreId(from input: String) -> String {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.allSatisfy({ $0.isNumber }) { return trimmed }
-        if let range = trimmed.range(of: #"id(\d+)"#, options: .regularExpression) {
-            return String(trimmed[range]).replacingOccurrences(of: "id", with: "")
-        }
-        return ""
-    }
-
-    func bulkLookup(idsText: String) async -> [LauncherApplication] {
-        let parts = idsText.components(separatedBy: CharacterSet(charactersIn: ",\n\r\t "))
-            .map(Self.extractAppStoreId(from:))
-            .filter { !$0.isEmpty }
-        var apps: [LauncherApplication] = []
-        for id in Array(Set(parts)) {
-            if let app = try? await lookup(input: id) { apps.append(app) }
-        }
-        return apps.sorted { $0.displayName < $1.displayName }
-    }
-}
-
+// MARK: - Store Principal (Utilisé par l'App)
 @MainActor
 final class SharedConfigurationStore: ObservableObject {
     @Published var configurations: [WidgetConfigurationList] = []
     @Published var library: [LauncherApplication] = []
+    @Published var isAppGroupAvailable: Bool = true
+    
     private let defaults: UserDefaults
 
     init() {
         if let groupDefaults = UserDefaults(suiteName: appGroupIdentifier) {
             self.defaults = groupDefaults
+            self.isAppGroupAvailable = true
         } else {
-            print("CRITICAL: App Group non configuré. Fallback sur .standard. Le Widget sera déconnecté des données.")
+            print("🚨 ERREUR CRITIQUE: App Group non disponible. Le widget ne fonctionnera pas.")
             self.defaults = .standard
+            self.isAppGroupAvailable = false
         }
         load()
     }
 
     func load() {
-        library = decode([LauncherApplication].self, key: appLibraryKey) ?? []
-        let saved = decode([WidgetConfigurationList].self, key: widgetConfigurationsKey) ?? []
-        configurations = saved.map { hydrated($0) }
-        save()
+        if let data = defaults.data(forKey: appLibraryKey) {
+            do {
+                library = try JSONDecoder().decode([LauncherApplication].self, from: data)
+            } catch { print("Erreur de décodage Library: \(error)") }
+        }
+        
+        if let data = defaults.data(forKey: widgetConfigurationsKey) {
+            do {
+                configurations = try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
+            } catch { print("Erreur de décodage Configurations: \(error)") }
+        }
     }
 
     func save() {
-        configurations = configurations.map { hydrated($0) }
-        encode(library, key: appLibraryKey)
-        encode(configurations, key: widgetConfigurationsKey)
-        WidgetCenter.shared.reloadAllTimelines()
+        do {
+            let libData = try JSONEncoder().encode(library)
+            defaults.set(libData, forKey: appLibraryKey)
+            
+            let confData = try JSONEncoder().encode(configurations)
+            defaults.set(confData, forKey: widgetConfigurationsKey)
+            
+            WidgetCenter.shared.reloadAllTimelines()
+        } catch {
+            print("Erreur d'encodage lors de la sauvegarde: \(error)")
+        }
     }
 
     func addToLibrary(_ app: LauncherApplication) {
-        guard !library.contains(where: { $0.appStoreId == app.appStoreId && $0.displayName == app.displayName }) else { return }
-        var newEntry = app
-        newEntry.id = UUID() // Renouvellement strict de l'UUID pour forcer le rendu SwiftUI
-        library.append(newEntry)
-        library.sort { $0.displayName < $1.displayName }
-        save()
+        if !library.contains(where: { $0.appStoreId == app.appStoreId && $0.displayName == app.displayName }) {
+            var newApp = app
+            newApp.id = UUID() // Force SwiftUI à voir ceci comme un nouvel objet
+            library.append(newApp)
+            library.sort { $0.displayName < $1.displayName }
+            save()
+        }
     }
 
     func addBulkToLibrary(_ apps: [LauncherApplication]) {
@@ -262,54 +170,32 @@ final class SharedConfigurationStore: ObservableObject {
         library.remove(atOffsets: offsets)
         save()
     }
-
+    
     func updateLibraryApp(_ app: LauncherApplication) {
-        guard let index = library.firstIndex(where: { $0.id == app.id }) else { return }
-        library[index] = app
-        save()
+        if let index = library.firstIndex(where: { $0.id == app.id }) {
+            library[index] = app
+            save()
+        }
     }
 
     func addConfiguration() {
         let selected = Array(library.prefix(4))
-        configurations.append(WidgetConfigurationList(name: "New Stack", applications: selected, itemLimit: 4, textAlignment: .leading))
+        configurations.append(WidgetConfigurationList(name: "Nouvelle Pile", applications: selected, itemLimit: 4, textAlignment: .leading))
         save()
     }
 
     func update(_ configuration: WidgetConfigurationList) {
-        guard let index = configurations.firstIndex(where: { $0.id == configuration.id }) else { return }
-        configurations[index] = hydrated(configuration)
-        save()
+        if let index = configurations.firstIndex(where: { $0.id == configuration.id }) {
+            var copy = configuration
+            copy.applicationIds = Array(copy.applicationIds.prefix(maxAppsPerStack))
+            copy.applications = copy.applicationIds.compactMap { id in library.first(where: { $0.id == id }) ?? copy.applications.first(where: { $0.id == id }) }
+            configurations[index] = copy
+            save()
+        }
     }
 
     func delete(at offsets: IndexSet) {
         configurations.remove(atOffsets: offsets)
         save()
-    }
-
-    private func hydrated(_ configuration: WidgetConfigurationList) -> WidgetConfigurationList {
-        var copy = configuration
-        copy.itemLimit = min(maxAppsPerStack, max(1, copy.itemLimit))
-        copy.applicationIds = Array(copy.applicationIds.prefix(maxAppsPerStack))
-        copy.applications = copy.applicationIds.compactMap { id in library.first(where: { $0.id == id }) ?? copy.applications.first(where: { $0.id == id }) }
-        return copy
-    }
-
-    private func decode<T: Decodable>(_ type: T.Type, key: String) -> T? {
-        guard let data = defaults.data(forKey: key) else { return nil }
-        do {
-            return try JSONDecoder().decode(type, from: data)
-        } catch {
-            print("Erreur de décodage pour \(key): \(error)")
-            return nil
-        }
-    }
-
-    private func encode<T: Encodable>(_ value: T, key: String) {
-        do {
-            let data = try JSONEncoder().encode(value)
-            defaults.set(data, forKey: key)
-        } catch {
-            print("Erreur d'encodage pour \(key): \(error)")
-        }
     }
 }
