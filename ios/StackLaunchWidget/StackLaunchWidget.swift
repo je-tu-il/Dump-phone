@@ -3,7 +3,7 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-nonisolated struct LauncherStackEntity: AppEntity {
+struct LauncherStackEntity: AppEntity {
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Launcher Stack"
     static var defaultQuery = LauncherStackQuery()
 
@@ -15,7 +15,7 @@ nonisolated struct LauncherStackEntity: AppEntity {
     }
 }
 
-nonisolated struct LauncherStackQuery: EntityQuery {
+struct LauncherStackQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [LauncherStackEntity] {
         SharedWidgetReader.configurations()
             .filter { identifiers.contains($0.id.uuidString) }
@@ -36,7 +36,7 @@ nonisolated struct LauncherStackQuery: EntityQuery {
     }
 }
 
-nonisolated struct SelectLauncherStackIntent: WidgetConfigurationIntent {
+struct SelectLauncherStackIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "Select Launcher Stack"
     static var description = IntentDescription("Choose which launcher list this widget instance displays.")
 
@@ -44,12 +44,12 @@ nonisolated struct SelectLauncherStackIntent: WidgetConfigurationIntent {
     var stack: LauncherStackEntity?
 }
 
-nonisolated struct LauncherEntry: TimelineEntry {
+struct LauncherEntry: TimelineEntry {
     let date: Date
     let configuration: WidgetConfigurationList?
 }
 
-nonisolated struct LauncherProvider: AppIntentTimelineProvider {
+struct LauncherProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> LauncherEntry {
         LauncherEntry(date: .now, configuration: SharedWidgetReader.configurations().first)
     }
