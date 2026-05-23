@@ -1,3 +1,4 @@
+// ios/StackLaunch/LauncherModels.swift
 import Combine
 import Foundation
 import ImageIO
@@ -45,14 +46,6 @@ nonisolated struct LauncherApplication: Codable, Identifiable, Hashable {
         self.iconRemoteURL = iconRemoteURL
         self.iconFileName = iconFileName
         self.textColorHex = textColorHex
-    }
-
-    /// Stable dedup key: prefer appStoreId, fall back to scheme+name
-    var deduplicationKey: String {
-        if let storeId = appStoreId, !storeId.isEmpty {
-            return "store:\(storeId)"
-        }
-        return "manual:\(urlScheme)|\(displayName)"
     }
 }
 
@@ -234,8 +227,8 @@ final class SharedConfigurationStore: ObservableObject {
     }
 
     func load() {
-        library = decode([LauncherApplication].self, key: appLibraryKey) ?? Self.sampleLibrary
-        let saved = decode([WidgetConfigurationList].self, key: widgetConfigurationsKey) ?? Self.sampleConfigurations(library: library)
+        library = decode([LauncherApplication].self, key: appLibraryKey) ?? []
+        let saved = decode([WidgetConfigurationList].self, key: widgetConfigurationsKey) ?? []
         configurations = saved.map { hydrated($0) }
         save()
     }
@@ -244,35 +237,19 @@ final class SharedConfigurationStore: ObservableObject {
         configurations = configurations.map { hydrated($0) }
         encode(library, key: appLibraryKey)
         encode(configurations, key: widgetConfigurationsKey)
-        defaults.synchronize()
         WidgetCenter.shared.reloadAllTimelines()
     }
 
     func addToLibrary(_ app: LauncherApplication) {
-        let newKey = app.deduplicationKey
-        guard !library.contains(where: { $0.deduplicationKey == newKey }) else { return }
+        guard !library.contains(where: { $0.appStoreId == app.appStoreId && $0.displayName == app.displayName }) else { return }
         library.append(app)
         library.sort { $0.displayName < $1.displayName }
         save()
     }
 
     func addBulkToLibrary(_ apps: [LauncherApplication]) {
-        var changed = false
-        for app in apps {
-            let newKey = app.deduplicationKey
-            guard !library.contains(where: { $0.deduplicationKey == newKey }) else { continue }
-            library.append(app)
-            changed = true
-        }
-        if changed {
-            library.sort { $0.displayName < $1.displayName }
-            save()
-        }
-    }
-
-    func isInLibrary(_ predefined: PredefinedApp) -> Bool {
-        let key = "store:\(predefined.appStoreId)"
-        return library.contains(where: { $0.deduplicationKey == key })
+        for app in apps { addToLibrary(app) }
+        save()
     }
 
     func updateLibraryApp(_ app: LauncherApplication) {
@@ -283,7 +260,7 @@ final class SharedConfigurationStore: ObservableObject {
 
     func addConfiguration() {
         let selected = Array(library.prefix(4))
-        configurations.append(WidgetConfigurationList(name: "Focus Stack", applications: selected, itemLimit: min(4, maxAppsPerStack), textAlignment: .leading))
+        configurations.append(WidgetConfigurationList(name: "New Stack", applications: selected, itemLimit: 4, textAlignment: .leading))
         save()
     }
 
@@ -295,7 +272,6 @@ final class SharedConfigurationStore: ObservableObject {
 
     func delete(at offsets: IndexSet) {
         configurations.remove(atOffsets: offsets)
-        if configurations.isEmpty { configurations = Self.sampleConfigurations(library: library) }
         save()
     }
 
@@ -315,14 +291,5 @@ final class SharedConfigurationStore: ObservableObject {
     private func encode<T: Encodable>(_ value: T, key: String) {
         guard let data = try? JSONEncoder().encode(value) else { return }
         defaults.set(data, forKey: key)
-    }
-
-    static let sampleLibrary: [LauncherApplication] = PredefinedAppsDatabase.all.map(\.launcherApplication)
-
-    static func sampleConfigurations(library: [LauncherApplication]) -> [WidgetConfigurationList] {
-        [
-            WidgetConfigurationList(name: "Morning Launch", applications: Array(library.prefix(4)), itemLimit: 4, textAlignment: .leading, backgroundColorHex: "#06131E"),
-            WidgetConfigurationList(name: "Social Stack", applications: Array(library.suffix(2)), itemLimit: 2, textAlignment: .center, backgroundColorHex: "#111827", iconStyle: .liquidGlass)
-        ]
     }
 }

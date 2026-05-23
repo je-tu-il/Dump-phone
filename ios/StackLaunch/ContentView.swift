@@ -113,11 +113,15 @@ struct ConfigurationEditor: View {
 private struct LibraryView: View {
     @ObservedObject var store: SharedConfigurationStore
     @State private var showingAddApp = false
+    @State private var CavalierBulk = false
     @State private var showingBulk = false
     var body: some View {
         List {
-            Section { Button { showingAddApp = true } label: { Label("Fetch one app", systemImage: "icloud.and.arrow.down.fill") }; Button { showingBulk = true } label: { Label("Bulk import App Store IDs", systemImage: "square.and.arrow.down.on.square.fill") } }
-            Section("Apps") { ForEach(store.library) { app in SelectedApplicationRow(app: app, store: store) } }
+            Section { 
+                Button { showingAddApp = true } label: { Label("Fetch from Catalog", systemImage: "icloud.and.arrow.down.fill") }
+                Button { showingBulk = true } label: { Label("Bulk import App Store IDs", systemImage: "square.and.arrow.down.on.square.fill") } 
+            }
+            Section("My Saved Library Apps") { ForEach(store.library) { app in SelectedApplicationRow(app: app, store: store) } }
         }
         .navigationTitle("App Library")
         .sheet(isPresented: $showingAddApp) { AddAppLookupView { store.addToLibrary($0) } }
@@ -175,7 +179,7 @@ private struct AddAppLookupView: View {
                     Text(errorMessage ?? "Artwork is downsampled and saved to the shared App Group for widget access.") 
                 }
                 
-                Section("Predefined apps") { 
+                Section("Predefined catalog (Select to add to your library)") { 
                     TextField("Search known apps", text: $searchText)
                         .focused($focusedField, equals: .search)
                         .onSubmit { focusedField = nil }
@@ -200,16 +204,17 @@ private struct AddAppLookupView: View {
                             .padding(.vertical, 4)
                             .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     } 
                 } 
             }
-            .navigationTitle("Add App")
+            .navigationTitle("Catalog Browser")
             .toolbar { 
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(selectedIds.isEmpty ? "Done" : "Add \(selectedIds.count)") {
+                    Button(selectedIds.isEmpty ? "Done" : "Add Selected (\(selectedIds.count))") {
                         for id in selectedIds {
                             if let app = PredefinedAppsDatabase.all.first(where: { $0.id == id }) {
                                 onAdd(app.launcherApplication)
