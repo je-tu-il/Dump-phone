@@ -116,17 +116,11 @@ private struct LibraryView: View {
     @State private var showingBulk = false
     var body: some View {
         List {
-            Section {
-                NavigationLink { AppCatalogView(store: store) } label: {
-                    Label("Browse App Catalog", systemImage: "square.grid.2x2.fill")
-                }
-                Button { showingAddApp = true } label: { Label("Fetch one app", systemImage: "icloud.and.arrow.down.fill") }
-                Button { showingBulk = true } label: { Label("Bulk import App Store IDs", systemImage: "square.and.arrow.down.on.square.fill") }
-            }
+            Section { Button { showingAddApp = true } label: { Label("Fetch one app", systemImage: "icloud.and.arrow.down.fill") }; Button { showingBulk = true } label: { Label("Bulk import App Store IDs", systemImage: "square.and.arrow.down.on.square.fill") } }
             Section("Apps") { ForEach(store.library) { app in SelectedApplicationRow(app: app, store: store) } }
         }
         .navigationTitle("App Library")
-        .sheet(isPresented: $showingAddApp) { AddAppLookupView(store: store) }
+        .sheet(isPresented: $showingAddApp) { AddAppLookupView { store.addToLibrary($0) } }
         .sheet(isPresented: $showingBulk) { BulkImportView(store: store) }
     }
 }
@@ -143,38 +137,108 @@ private struct AddFromLibraryView: View {
 }
 
 private struct AddAppLookupView: View {
-    @ObservedObject var store: SharedConfigurationStore
+    let onAdd: (LauncherApplication) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var input = ""
     @State private var searchText = ""
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showingTutorial = false
+    @State private var selectedIds: Set<String> = []
     @FocusState private var focusedField: Field?
     private let lookupService = ITunesAppLookupService()
     enum Field: Hashable { case lookup, search }
-    private var filteredApps: [PredefinedApp] { searchText.isEmpty ? PredefinedAppsDatabase.all : PredefinedAppsDatabase.all.filter { $0.name.localizedStandardContains(searchText) || $0.appStoreId.localizedStandardContains(searchText) } }
-    var body: some View { NavigationStack { List { Section { TextField("Paste App Store URL or ID", text: $input).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focusedField, equals: .lookup).submitLabel(.search).onSubmit { Task { await lookupAndAdd() } }; Button { Task { await lookupAndAdd() } } label: { isLoading ? AnyView(ProgressView()) : AnyView(Label("Fetch from iTunes Search API", systemImage: "icloud.and.arrow.down.fill")) }.disabled(isLoading || ITunesAppLookupService.extractAppStoreId(from: input).isEmpty); Button("How to find an App ID?") { showingTutorial = true } } footer: { Text(errorMessage ?? "Artwork is downsampled and saved to the shared App Group for widget access.") }
-            Section("Predefined apps") { TextField("Search known apps", text: $searchText).focused($focusedField, equals: .search).onSubmit { focusedField = nil }; ForEach(filteredApps) { predefined in Button { addPredefined(predefined) } label: { Label(predefined.name, systemImage: predefined.iconName ?? "app.fill") }.disabled(store.isInLibrary(predefined)) } } }.navigationTitle("Add App").toolbar { Button("Done") { dismiss() } }.alert("How to find an App ID", isPresented: $showingTutorial) { Button("Got it", role: .cancel) {} } message: { Text("Open an App Store link and look for the number after /id. In apps.apple.com/app/name/id123456789, the App ID is 123456789.") } } }
-
-    private func addPredefined(_ predefined: PredefinedApp) {
-        store.addToLibrary(predefined.launcherApplication)
-        dismiss()
+    
+    private var filteredApps: [PredefinedApp] { 
+        searchText.isEmpty ? PredefinedAppsDatabase.all : PredefinedAppsDatabase.all.filter { $0.name.localizedStandardContains(searchText) || $0.appStoreId.localizedStandardContains(searchText) } 
     }
-
-    private func lookupAndAdd() async {
+    
+    var body: some View { 
+        NavigationStack { 
+            List { 
+                Section { 
+                    TextField("Paste App Store URL or ID", text: $input)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($focusedField, equals: .lookup)
+                        .submitLabel(.search)
+                        .onSubmit { Task { await lookupAndAdd() } }
+                    Button { 
+                        Task { await lookupAndAdd() } 
+                    } label: { 
+                        isLoading ? AnyView(ProgressView()) : AnyView(Label("Fetch from iTunes Search API", systemImage: "icloud.and.arrow.down.fill")) 
+                    }
+                    .disabled(isLoading || ITunesAppLookupService.extractAppStoreId(from: input).isEmpty)
+                    Button("How to find an App ID?") { showingTutorial = true } 
+                } footer: { 
+                    Text(errorMessage ?? "Artwork is downsampled and saved to the shared App Group for widget access.") 
+                }
+                
+                Section("Predefined apps") { 
+                    TextField("Search known apps", text: $searchText)
+                        .focused($focusedField, equals: .search)
+                        .onSubmit { focusedField = nil }
+                    
+                    ForEach(filteredApps, id: \.id) { app in
+                        let isSelected = selectedIds.contains(app.id)
+                        Button {
+                            if isSelected {
+                                selectedIds.remove(app.id)
+                            } else {
+                                selectedIds.insert(app.id)
+                            }
+                        } label: {
+                            HStack(spacing: 14) {
+                                AppIconPreview(app: app.launcherApplication)
+                                    .frame(width: 30, height: 30)
+                                Text(app.name)
+                                Spacer()
+                                Image(systemName: isSelected ? "checkmark.circle.fill" : "plus.circle")
+                                    .foregroundStyle(isSelected ? .cyan : .primary)
+                            }
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                        }
+                    } 
+                } 
+            }
+            .navigationTitle("Add App")
+            .toolbar { 
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(selectedIds.isEmpty ? "Done" : "Add \(selectedIds.count)") {
+                        for id in selectedIds {
+                            if let app = PredefinedAppsDatabase.all.first(where: { $0.id == id }) {
+                                onAdd(app.launcherApplication)
+                            }
+                        }
+                        dismiss()
+                    }
+                }
+            }
+            .alert("How to find an App ID", isPresented: $showingTutorial) { 
+                Button("Got it", role: .cancel) {} 
+            } message: { 
+                Text("Open an App Store link and look for the number after /id. In apps.apple.com/app/name/id123456789, the App ID is 123456789.") 
+            } 
+        } 
+    }
+    
+    private func lookupAndAdd() async { 
         focusedField = nil
         isLoading = true
         errorMessage = nil
-        do {
-            let app = try await lookupService.lookup(input: input)
-            store.addToLibrary(app)
+        do { 
+            onAdd(try await lookupService.lookup(input: input))
             input = ""
-            dismiss()
-        } catch {
-            errorMessage = "Could not fetch that app. Check the ID or URL and try again."
+            dismiss() 
+        } catch { 
+            errorMessage = "Could not fetch that app. Check the ID or URL and try again." 
         }
-        isLoading = false
+        isLoading = false 
     }
 }
 
@@ -215,58 +279,6 @@ private struct BulkImportView: View {
     }
     private func importApps() async { editorFocused = false; isImporting = true; let apps = await lookupService.bulkLookup(idsText: idsText); store.addBulkToLibrary(apps); importedCount = apps.count; isImporting = false }
 }
-
-// MARK: - App Catalog View
-
-struct AppCatalogView: View {
-    @ObservedObject var store: SharedConfigurationStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var selectedIds: Set<String> = []
-    @State private var searchText: String = ""
-
-    private var filteredApps: [PredefinedApp] {
-        if searchText.isEmpty { return PredefinedAppsDatabase.all }
-        return PredefinedAppsDatabase.all.filter {
-            $0.name.localizedStandardContains(searchText) ||
-            $0.urlScheme.localizedStandardContains(searchText) ||
-            $0.appStoreId.localizedStandardContains(searchText)
-        }
-    }
-
-    private var addableCount: Int {
-        selectedIds.filter { id in !store.isInLibrary(PredefinedAppsDatabase.allById[id]!) }.count
-    }
-
-    var body: some View {
-        List {
-ForEach(filteredApps, id: \.id) { app in
-    let inLibrary = store.library.contains(where: { $0.appStoreId == app.appStoreId })
-    let isSelected = selectedIds.contains(app.id)
-    
-    Button {
-        if !inLibrary {
-            if isSelected { 
-                selectedIds.remove(app.id) 
-            } else { 
-                selectedIds.insert(app.id) 
-            }
-        }
-    } label: {
-        HStack(spacing: 14) {
-            AppIconPreview(app: app.launcherApplication)
-                .frame(width: 30, height: 30)
-            Text(app.name)
-            Spacer()
-            Image(systemName: inLibrary ? "checkmark.circle.fill" : (isSelected ? "checkmark.circle" : "plus.circle"))
-                .foregroundStyle(inLibrary ? .gray : (isSelected ? .cyan : .primary))
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-    }
-    .disabled(inLibrary)
-}
-
-// MARK: - Shared Rows
 
 private struct SelectedApplicationRow: View {
     let app: LauncherApplication
