@@ -1,3 +1,4 @@
+// ios/StackLaunch/LauncherModels.swift
 import Combine
 import Foundation
 import ImageIO
@@ -10,7 +11,6 @@ let widgetConfigurationsKey = "widgetConfigurations"
 let appLibraryKey = "globalAppLibrary"
 let maxAppsPerStack = 10
 
-// MARK: - Modèles de données
 nonisolated enum IconStyle: String, Codable, CaseIterable, Identifiable {
     case standard, grayscale, liquidGlass
     var id: String { rawValue }
@@ -18,7 +18,7 @@ nonisolated enum IconStyle: String, Codable, CaseIterable, Identifiable {
 }
 
 nonisolated struct LauncherApplication: Codable, Identifiable, Hashable {
-    var id: UUID // 'var' obligatoire pour forcer le rafraîchissement UI
+    var id: UUID
     var displayName: String
     var urlScheme: String
     var symbolName: String
@@ -75,7 +75,6 @@ nonisolated struct WidgetConfigurationList: Codable, Identifiable, Hashable {
     }
 }
 
-// MARK: - Helper de lecture partagée (Utilisé par le Widget)
 struct SharedWidgetReader {
     static var defaults: UserDefaults? {
         UserDefaults(suiteName: appGroupIdentifier)
@@ -103,7 +102,6 @@ struct SharedWidgetReader {
     }
 }
 
-// MARK: - Store Principal (Utilisé par l'App)
 @MainActor
 final class SharedConfigurationStore: ObservableObject {
     @Published var configurations: [WidgetConfigurationList] = []
@@ -117,7 +115,6 @@ final class SharedConfigurationStore: ObservableObject {
             self.defaults = groupDefaults
             self.isAppGroupAvailable = true
         } else {
-            print("🚨 ERREUR CRITIQUE: App Group non disponible. Le widget ne fonctionnera pas.")
             self.defaults = .standard
             self.isAppGroupAvailable = false
         }
@@ -155,7 +152,7 @@ final class SharedConfigurationStore: ObservableObject {
     func addToLibrary(_ app: LauncherApplication) {
         if !library.contains(where: { $0.appStoreId == app.appStoreId && $0.displayName == app.displayName }) {
             var newApp = app
-            newApp.id = UUID() // Force SwiftUI à voir ceci comme un nouvel objet
+            newApp.id = UUID()
             library.append(newApp)
             library.sort { $0.displayName < $1.displayName }
             save()

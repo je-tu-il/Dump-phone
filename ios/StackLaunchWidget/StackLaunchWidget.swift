@@ -1,8 +1,8 @@
+// ios/StackLaunchWidget/StackLaunchWidget.swift
 import AppIntents
 import SwiftUI
 import WidgetKit
 
-// Sécurisation de l'AppIntent : S'il n'y a pas de données, on renvoie une entité "Vide"
 nonisolated struct LauncherStackEntity: AppEntity {
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Launcher Stack"
     static var defaultQuery = LauncherStackQuery()
@@ -25,7 +25,6 @@ nonisolated struct LauncherStackQuery: EntityQuery {
     func suggestedEntities() async throws -> [LauncherStackEntity] {
         let configs = SharedWidgetReader.configurations()
         if configs.isEmpty {
-            // Empêche le menu "Edit Widget" de crasher s'il n'y a pas de pile
             return [LauncherStackEntity(id: "empty_fallback", name: "⚠️ Create a stack in the app")]
         }
         return configs.map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
@@ -150,7 +149,6 @@ private struct WidgetIconView: View {
 
     var body: some View {
         Group {
-            // Utilisation du SharedWidgetReader pour récupérer l'image partagée
             if let iconURL = SharedWidgetReader.getIconURL(fileName: app.iconFileName),
                let image = UIImage(contentsOfFile: iconURL.path) {
                 Image(uiImage: image)
