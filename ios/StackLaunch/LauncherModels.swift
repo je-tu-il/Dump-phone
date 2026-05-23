@@ -262,7 +262,7 @@ final class SharedConfigurationStore: ObservableObject {
         }
         library.sort { $0.displayName < $1.displayName }
         save()
-        logger.info("Bulk added \(apps.count) apps, library now \(library.count)")
+        logger.info("Bulk added \(apps.count) apps, library now \(self.library.count)")
     }
 
     func updateLibraryApp(_ app: LauncherApplication) {
