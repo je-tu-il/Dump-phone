@@ -72,18 +72,15 @@ nonisolated enum SharedWidgetReader {
     private static let logger = Logger(subsystem: "app.rork.stacklaunch.widget", category: "SharedWidgetReader")
 
     static func configurations() -> [WidgetConfigurationList] {
-        do {
-            guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else {
-                logger.warning("App Group UserDefaults unavailable, returning empty configurations")
-                return []
-            }
-            let library: [LauncherApplication] = decodeOrEmpty([LauncherApplication].self, key: appLibraryKey, defaults: defaults)
-            let stacks: [WidgetConfigurationList] = decodeOrEmpty([WidgetConfigurationList].self, key: widgetConfigurationsKey, defaults: defaults)
-            return stacks.map { hydrate($0, library: library) }
-        } catch {
-            logger.error("Failed to load configurations: \(error.localizedDescription)")
+        guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else {
+            logger.error("App Group container '\(appGroupIdentifier)' is NOT available. Check entitlements and provisioning profile.")
             return []
         }
+        let library: [LauncherApplication] = decodeOrEmpty([LauncherApplication].self, key: appLibraryKey, defaults: defaults)
+        logger.info("Widget reader loaded \(library.count) library apps")
+        let stacks: [WidgetConfigurationList] = decodeOrEmpty([WidgetConfigurationList].self, key: widgetConfigurationsKey, defaults: defaults)
+        logger.info("Widget reader loaded \(stacks.count) stacks")
+        return stacks.map { hydrate($0, library: library) }
     }
 
     static func configuration(id: String?) -> WidgetConfigurationList? {

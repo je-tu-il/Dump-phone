@@ -23,11 +23,18 @@ nonisolated struct LauncherStackQuery: EntityQuery {
     }
 
     func suggestedEntities() async -> [LauncherStackEntity] {
-        SharedWidgetReader.configurations().map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
+        let configs = SharedWidgetReader.configurations()
+        guard !configs.isEmpty else {
+            return [LauncherStackEntity(id: "00000000-0000-0000-0000-000000000000", name: "Create a stack in the app")]
+        }
+        return configs.map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
     }
 
     func defaultResult() async -> LauncherStackEntity? {
-        SharedWidgetReader.configurations().first.map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
+        if let first = SharedWidgetReader.configurations().first {
+            return LauncherStackEntity(id: first.id.uuidString, name: first.name)
+        }
+        return LauncherStackEntity(id: "00000000-0000-0000-0000-000000000000", name: "Create a stack in the app")
     }
 }
 
