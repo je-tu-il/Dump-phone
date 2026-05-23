@@ -116,11 +116,17 @@ private struct LibraryView: View {
     @State private var showingBulk = false
     var body: some View {
         List {
-            Section { Button { showingAddApp = true } label: { Label("Fetch one app", systemImage: "icloud.and.arrow.down.fill") }; Button { showingBulk = true } label: { Label("Bulk import App Store IDs", systemImage: "square.and.arrow.down.on.square.fill") } }
+            Section {
+                NavigationLink { AppCatalogView(store: store) } label: {
+                    Label("Browse App Catalog", systemImage: "square.grid.2x2.fill")
+                }
+                Button { showingAddApp = true } label: { Label("Fetch one app", systemImage: "icloud.and.arrow.down.fill") }
+                Button { showingBulk = true } label: { Label("Bulk import App Store IDs", systemImage: "square.and.arrow.down.on.square.fill") }
+            }
             Section("Apps") { ForEach(store.library) { app in SelectedApplicationRow(app: app, store: store) } }
         }
         .navigationTitle("App Library")
-        .sheet(isPresented: $showingAddApp) { AddAppLookupView { store.addToLibrary($0) } }
+        .sheet(isPresented: $showingAddApp) { AddAppLookupView(store: store) }
         .sheet(isPresented: $showingBulk) { BulkImportView(store: store) }
     }
 }
@@ -137,7 +143,7 @@ private struct AddFromLibraryView: View {
 }
 
 private struct AddAppLookupView: View {
-    let onAdd: (LauncherApplication) -> Void
+    @ObservedObject var store: SharedConfigurationStore
     @Environment(\.dismiss) private var dismiss
     @State private var input = ""
     @State private var searchText = ""
@@ -149,8 +155,27 @@ private struct AddAppLookupView: View {
     enum Field: Hashable { case lookup, search }
     private var filteredApps: [PredefinedApp] { searchText.isEmpty ? PredefinedAppsDatabase.all : PredefinedAppsDatabase.all.filter { $0.name.localizedStandardContains(searchText) || $0.appStoreId.localizedStandardContains(searchText) } }
     var body: some View { NavigationStack { List { Section { TextField("Paste App Store URL or ID", text: $input).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focusedField, equals: .lookup).submitLabel(.search).onSubmit { Task { await lookupAndAdd() } }; Button { Task { await lookupAndAdd() } } label: { isLoading ? AnyView(ProgressView()) : AnyView(Label("Fetch from iTunes Search API", systemImage: "icloud.and.arrow.down.fill")) }.disabled(isLoading || ITunesAppLookupService.extractAppStoreId(from: input).isEmpty); Button("How to find an App ID?") { showingTutorial = true } } footer: { Text(errorMessage ?? "Artwork is downsampled and saved to the shared App Group for widget access.") }
-            Section("Predefined apps") { TextField("Search known apps", text: $searchText).focused($focusedField, equals: .search).onSubmit { focusedField = nil }; ForEach(filteredApps) { predefined in Button { onAdd(predefined.launcherApplication); dismiss() } label: { Label(predefined.name, systemImage: predefined.iconName ?? "app.fill") } } } }.navigationTitle("Add App").toolbar { Button("Done") { dismiss() } }.alert("How to find an App ID", isPresented: $showingTutorial) { Button("Got it", role: .cancel) {} } message: { Text("Open an App Store link and look for the number after /id. In apps.apple.com/app/name/id123456789, the App ID is 123456789.") } } }
-    private func lookupAndAdd() async { focusedField = nil; isLoading = true; errorMessage = nil; do { onAdd(try await lookupService.lookup(input: input)); input = ""; dismiss() } catch { errorMessage = "Could not fetch that app. Check the ID or URL and try again." }; isLoading = false }
+            Section("Predefined apps") { TextField("Search known apps", text: $searchText).focused($focusedField, equals: .search).onSubmit { focusedField = nil }; ForEach(filteredApps) { predefined in Button { addPredefined(predefined) } label: { Label(predefined.name, systemImage: predefined.iconName ?? "app.fill") }.disabled(store.isInLibrary(predefined)) } } }.navigationTitle("Add App").toolbar { Button("Done") { dismiss() } }.alert("How to find an App ID", isPresented: $showingTutorial) { Button("Got it", role: .cancel) {} } message: { Text("Open an App Store link and look for the number after /id. In apps.apple.com/app/name/id123456789, the App ID is 123456789.") } } }
+
+    private func addPredefined(_ predefined: PredefinedApp) {
+        store.addToLibrary(predefined.launcherApplication)
+        dismiss()
+    }
+
+    private func lookupAndAdd() async {
+        focusedField = nil
+        isLoading = true
+        errorMessage = nil
+        do {
+            let app = try await lookupService.lookup(input: input)
+            store.addToLibrary(app)
+            input = ""
+            dismiss()
+        } catch {
+            errorMessage = "Could not fetch that app. Check the ID or URL and try again."
+        }
+        isLoading = false
+    }
 }
 
 private struct BulkImportView: View {
@@ -190,6 +215,99 @@ private struct BulkImportView: View {
     }
     private func importApps() async { editorFocused = false; isImporting = true; let apps = await lookupService.bulkLookup(idsText: idsText); store.addBulkToLibrary(apps); importedCount = apps.count; isImporting = false }
 }
+
+// MARK: - App Catalog View
+
+struct AppCatalogView: View {
+    @ObservedObject var store: SharedConfigurationStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedIds: Set<String> = []
+    @State private var searchText: String = ""
+
+    private var filteredApps: [PredefinedApp] {
+        if searchText.isEmpty { return PredefinedAppsDatabase.all }
+        return PredefinedAppsDatabase.all.filter {
+            $0.name.localizedStandardContains(searchText) ||
+            $0.urlScheme.localizedStandardContains(searchText) ||
+            $0.appStoreId.localizedStandardContains(searchText)
+        }
+    }
+
+    private var addableCount: Int {
+        selectedIds.filter { id in !store.isInLibrary(PredefinedAppsDatabase.allById[id]!) }.count
+    }
+
+    var body: some View {
+        List {
+            ForEach(filteredApps) { app in
+                let inLibrary = store.isInLibrary(app)
+                let isSelected = selectedIds.contains(app.id)
+                Button {
+                    if !inLibrary {
+                        if isSelected { selectedIds.remove(app.id) } else { selectedIds.insert(app.id) }
+                    }
+                } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: app.iconName ?? "app.fill")
+                            .font(.title3)
+                            .foregroundStyle(inLibrary ? .secondary : .cyan)
+                            .frame(width: 32, height: 32)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(app.name)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(inLibrary ? .secondary : .primary)
+                            Text(app.urlScheme)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        if inLibrary {
+                            Text("In Library")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.green)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(.green.opacity(0.15), in: Capsule())
+                        } else {
+                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                .font(.title3)
+                                .foregroundStyle(isSelected ? .orange : .secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .disabled(inLibrary)
+            }
+        }
+        .navigationTitle("App Catalog")
+        .searchable(text: $searchText, prompt: "Search apps…")
+        .safeAreaInset(edge: .bottom) {
+            if !selectedIds.isEmpty {
+                Button {
+                    let apps = selectedIds.compactMap { PredefinedAppsDatabase.allById[$0]?.launcherApplication }
+                    store.addBulkToLibrary(apps)
+                    dismiss()
+                } label: {
+                    Text("Add \(selectedIds.count) to Library")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(.orange, in: RoundedRectangle(cornerRadius: 16))
+                        .foregroundStyle(.white)
+                }
+                .padding()
+                .background(.ultraThinMaterial)
+            }
+        }
+    }
+}
+
+// MARK: - Shared Rows
 
 private struct SelectedApplicationRow: View {
     let app: LauncherApplication

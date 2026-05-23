@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import os
 
 let appGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.stacklaunch"
 let widgetConfigurationsKey = "widgetConfigurations"
@@ -68,11 +69,21 @@ extension Color {
 }
 
 nonisolated enum SharedWidgetReader {
+    private static let logger = Logger(subsystem: "app.rork.stacklaunch.widget", category: "SharedWidgetReader")
+
     static func configurations() -> [WidgetConfigurationList] {
-        let defaults = UserDefaults(suiteName: appGroupIdentifier) ?? .standard
-        let library: [LauncherApplication] = decode([LauncherApplication].self, key: appLibraryKey, defaults: defaults) ?? []
-        let stacks: [WidgetConfigurationList] = decode([WidgetConfigurationList].self, key: widgetConfigurationsKey, defaults: defaults) ?? []
-        return stacks.map { hydrate($0, library: library) }
+        do {
+            guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else {
+                logger.warning("App Group UserDefaults unavailable, returning empty configurations")
+                return []
+            }
+            let library: [LauncherApplication] = decodeOrEmpty([LauncherApplication].self, key: appLibraryKey, defaults: defaults)
+            let stacks: [WidgetConfigurationList] = decodeOrEmpty([WidgetConfigurationList].self, key: widgetConfigurationsKey, defaults: defaults)
+            return stacks.map { hydrate($0, library: library) }
+        } catch {
+            logger.error("Failed to load configurations: \(error.localizedDescription)")
+            return []
+        }
     }
 
     static func configuration(id: String?) -> WidgetConfigurationList? {
@@ -95,8 +106,13 @@ nonisolated enum SharedWidgetReader {
         return copy
     }
 
-    private static func decode<T: Decodable>(_ type: T.Type, key: String, defaults: UserDefaults) -> T? {
-        guard let data = defaults.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(type, from: data)
+    private static func decodeOrEmpty<T: Decodable>(_ type: T.Type, key: String, defaults: UserDefaults) -> T where T: RangeReplaceableCollection {
+        guard let data = defaults.data(forKey: key) else { return T() }
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            logger.error("Decode failed for key '\(key)': \(error.localizedDescription)")
+            return T()
+        }
     }
 }

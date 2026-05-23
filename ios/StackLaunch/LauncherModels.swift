@@ -46,6 +46,14 @@ nonisolated struct LauncherApplication: Codable, Identifiable, Hashable {
         self.iconFileName = iconFileName
         self.textColorHex = textColorHex
     }
+
+    /// Stable dedup key: prefer appStoreId, fall back to scheme+name
+    var deduplicationKey: String {
+        if let storeId = appStoreId, !storeId.isEmpty {
+            return "store:\(storeId)"
+        }
+        return "manual:\(urlScheme)|\(displayName)"
+    }
 }
 
 nonisolated enum TextAlignmentOption: String, Codable, CaseIterable, Identifiable {
@@ -236,19 +244,35 @@ final class SharedConfigurationStore: ObservableObject {
         configurations = configurations.map { hydrated($0) }
         encode(library, key: appLibraryKey)
         encode(configurations, key: widgetConfigurationsKey)
+        defaults.synchronize()
         WidgetCenter.shared.reloadAllTimelines()
     }
 
     func addToLibrary(_ app: LauncherApplication) {
-        guard !library.contains(where: { $0.appStoreId == app.appStoreId && $0.displayName == app.displayName }) else { return }
+        let newKey = app.deduplicationKey
+        guard !library.contains(where: { $0.deduplicationKey == newKey }) else { return }
         library.append(app)
         library.sort { $0.displayName < $1.displayName }
         save()
     }
 
     func addBulkToLibrary(_ apps: [LauncherApplication]) {
-        for app in apps { addToLibrary(app) }
-        save()
+        var changed = false
+        for app in apps {
+            let newKey = app.deduplicationKey
+            guard !library.contains(where: { $0.deduplicationKey == newKey }) else { continue }
+            library.append(app)
+            changed = true
+        }
+        if changed {
+            library.sort { $0.displayName < $1.displayName }
+            save()
+        }
+    }
+
+    func isInLibrary(_ predefined: PredefinedApp) -> Bool {
+        let key = "store:\(predefined.appStoreId)"
+        return library.contains(where: { $0.deduplicationKey == key })
     }
 
     func updateLibraryApp(_ app: LauncherApplication) {

@@ -16,13 +16,13 @@ nonisolated struct LauncherStackEntity: AppEntity {
 }
 
 nonisolated struct LauncherStackQuery: EntityQuery {
-    func entities(for identifiers: [String]) async throws -> [LauncherStackEntity] {
+    func entities(for identifiers: [String]) async -> [LauncherStackEntity] {
         SharedWidgetReader.configurations()
             .filter { identifiers.contains($0.id.uuidString) }
             .map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
     }
 
-    func suggestedEntities() async throws -> [LauncherStackEntity] {
+    func suggestedEntities() async -> [LauncherStackEntity] {
         SharedWidgetReader.configurations().map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
     }
 
