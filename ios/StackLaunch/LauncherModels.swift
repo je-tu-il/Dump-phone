@@ -10,6 +10,7 @@ public let widgetConfigurationsKey = "widgetConfigurations"
 public let appLibraryKey = "globalAppLibrary"
 public let maxAppsPerStack = 10
 
+// MARK: - Modèles
 public enum IconStyle: String, Codable, CaseIterable, Identifiable {
     case standard, grayscale, liquidGlass
     public var id: String { rawValue }
@@ -74,6 +75,130 @@ public struct WidgetConfigurationList: Codable, Identifiable, Hashable {
     }
 }
 
+// MARK: - Extensions requises par ContentView
+extension Color {
+    init(hex: String) {
+        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var value: UInt64 = 0
+        Scanner(string: cleaned).scanHexInt64(&value)
+        let r, g, b: Double
+        switch cleaned.count {
+        case 6:
+            r = Double((value >> 16) & 0xFF) / 255
+            g = Double((value >> 8) & 0xFF) / 255
+            b = Double(value & 0xFF) / 255
+        default:
+            r = 1; g = 1; b = 1
+        }
+        self.init(red: r, green: g, blue: b)
+    }
+
+    func hexString() -> String {
+        let uiColor = UIColor(self)
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0
+        uiColor.getRed(&red, green: &green, blue: &blue, alpha: nil)
+        return String(format: "#%02X%02X%02X", Int(red * 255), Int(green * 255), Int(blue * 255))
+    }
+}
+
+// MARK: - Stockage des images
+@MainActor
+public enum SharedIconStorage {
+    static func containerURL() -> URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)
+    }
+
+    public static func iconsDirectoryURL() throws -> URL {
+        guard let container = containerURL() else { throw URLError(.cannotCreateFile) }
+        let directory = container.appendingPathComponent("DownloadedIcons", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    public static func saveIcon(from remoteURL: URL, appStoreId: String) async throws -> String {
+        let (data, response) = try await URLSession.shared.data(from: remoteURL)
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        guard let downsampled = downsample(imageData: data, maxPixelSize: 96) else { throw URLError(.cannotDecodeContentData) }
+        let fileName = "app-icon-\(appStoreId).jpg"
+        let destination = try iconsDirectoryURL().appendingPathComponent(fileName)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try downsampled.write(to: destination, options: .atomic)
+        return fileName
+    }
+
+    private static func downsample(imageData: Data, maxPixelSize: CGFloat) -> Data? {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(imageData as CFData, options) else { return nil }
+        let downsampleOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ] as CFDictionary
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions) else { return nil }
+        return UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.72)
+    }
+}
+
+// MARK: - Services iTunes
+public struct ITunesLookupResponse: Decodable {
+    let results: [ITunesAppResult]
+}
+
+public struct ITunesAppResult: Decodable {
+    let trackName: String
+    let trackId: Int
+    let artworkUrl512: String?
+    let artworkUrl100: String?
+    let trackViewUrl: String?
+}
+
+@MainActor
+public final class ITunesAppLookupService {
+    public init() {}
+    
+    public func lookup(input: String) async throws -> LauncherApplication {
+        let appId = Self.extractAppStoreId(from: input)
+        guard !appId.isEmpty, let url = URL(string: "https://itunes.apple.com/lookup?id=\(appId)") else { throw URLError(.badURL) }
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else { throw URLError(.badServerResponse) }
+        let decoded = try JSONDecoder().decode(ITunesLookupResponse.self, from: data)
+        guard let app = decoded.results.first else { throw URLError(.resourceUnavailable) }
+        
+        let iconURLString = app.artworkUrl512 ?? app.artworkUrl100
+        var iconFileName: String?
+        if let iconURLString, let iconURL = URL(string: iconURLString) {
+            iconFileName = try? await SharedIconStorage.saveIcon(from: iconURL, appStoreId: String(app.trackId))
+        }
+        return LauncherApplication(displayName: app.trackName, urlScheme: app.trackViewUrl ?? "https://apps.apple.com/app/id\(app.trackId)", appStoreId: String(app.trackId), iconRemoteURL: iconURLString, iconFileName: iconFileName)
+    }
+
+    public static func extractAppStoreId(from input: String) -> String {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.allSatisfy({ $0.isNumber }) { return trimmed }
+        if let range = trimmed.range(of: #"id(\d+)"#, options: .regularExpression) {
+            return String(trimmed[range]).replacingOccurrences(of: "id", with: "")
+        }
+        return ""
+    }
+
+    public func bulkLookup(idsText: String) async -> [LauncherApplication] {
+        let parts = idsText.components(separatedBy: CharacterSet(charactersIn: ",\n\r\t "))
+            .map(Self.extractAppStoreId(from:))
+            .filter { !$0.isEmpty }
+        var apps: [LauncherApplication] = []
+        for id in Array(Set(parts)) {
+            if let app = try? await lookup(input: id) { apps.append(app) }
+        }
+        return apps.sorted { $0.displayName < $1.displayName }
+    }
+}
+
+// MARK: - Store Principal
 @MainActor
 public final class SharedConfigurationStore: ObservableObject {
     @Published public var configurations: [WidgetConfigurationList] = []
@@ -94,31 +219,18 @@ public final class SharedConfigurationStore: ObservableObject {
     }
 
     public func load() {
-        if let data = defaults.data(forKey: appLibraryKey) {
-            do {
-                library = try JSONDecoder().decode([LauncherApplication].self, from: data)
-            } catch { print("Erreur de décodage Library: \(error)") }
+        if let data = defaults.data(forKey: appLibraryKey), let decoded = try? JSONDecoder().decode([LauncherApplication].self, from: data) {
+            library = decoded
         }
-        
-        if let data = defaults.data(forKey: widgetConfigurationsKey) {
-            do {
-                configurations = try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
-            } catch { print("Erreur de décodage Configurations: \(error)") }
+        if let data = defaults.data(forKey: widgetConfigurationsKey), let decoded = try? JSONDecoder().decode([WidgetConfigurationList].self, from: data) {
+            configurations = decoded
         }
     }
 
     public func save() {
-        do {
-            let libData = try JSONEncoder().encode(library)
-            defaults.set(libData, forKey: appLibraryKey)
-            
-            let confData = try JSONEncoder().encode(configurations)
-            defaults.set(confData, forKey: widgetConfigurationsKey)
-            
-            WidgetCenter.shared.reloadAllTimelines()
-        } catch {
-            print("Erreur d'encodage lors de la sauvegarde: \(error)")
-        }
+        if let libData = try? JSONEncoder().encode(library) { defaults.set(libData, forKey: appLibraryKey) }
+        if let confData = try? JSONEncoder().encode(configurations) { defaults.set(confData, forKey: widgetConfigurationsKey) }
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     public func addToLibrary(_ app: LauncherApplication) {
