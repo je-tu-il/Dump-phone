@@ -10,6 +10,41 @@ public let widgetConfigurationsKey = "widgetConfigurations"
 public let appLibraryKey = "globalAppLibrary"
 public let maxAppsPerStack = 10
 
+// MARK: - Système de Diagnostic
+public struct SharedLogger {
+    public static func log(_ message: String) {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return }
+        let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        let entry = "[\(formatter.string(from: Date()))] \(message)\n"
+        
+        if let data = entry.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logFile.path) {
+                if let handle = try? FileHandle(forWritingTo: logFile) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                }
+            } else {
+                try? data.write(to: logFile)
+            }
+        }
+    }
+    
+    public static func read() -> String {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return "Err: No App Group Container" }
+        let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
+        return (try? String(contentsOf: logFile)) ?? "Err: No logs readable"
+    }
+    
+    public static func clear() {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return }
+        let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
+        try? FileManager.default.removeItem(at: logFile)
+    }
+}
+
 // MARK: - Modèles
 public enum IconStyle: String, Codable, CaseIterable, Identifiable {
     case standard, grayscale, liquidGlass
@@ -75,7 +110,7 @@ public struct WidgetConfigurationList: Codable, Identifiable, Hashable {
     }
 }
 
-// MARK: - Extensions requises par ContentView
+// MARK: - Extensions
 extension Color {
     init(hex: String) {
         let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
@@ -101,7 +136,7 @@ extension Color {
     }
 }
 
-// MARK: - Stockage des images
+// MARK: - Stockage des images (Version d'origine restaurée)
 @MainActor
 public enum SharedIconStorage {
     static func containerURL() -> URL? {
@@ -127,6 +162,7 @@ public enum SharedIconStorage {
             try FileManager.default.removeItem(at: destination)
         }
         try downsampled.write(to: destination, options: .atomic)
+        SharedLogger.log("Icon saved: \(fileName)")
         return fileName
     }
 
@@ -208,29 +244,49 @@ public final class SharedConfigurationStore: ObservableObject {
     private let defaults: UserDefaults
 
     public init() {
+        SharedLogger.clear()
+        SharedLogger.log("Store Init Started")
         if let groupDefaults = UserDefaults(suiteName: appGroupIdentifier) {
             self.defaults = groupDefaults
             self.isAppGroupAvailable = true
+            SharedLogger.log("AppGroup linked")
         } else {
             self.defaults = .standard
             self.isAppGroupAvailable = false
+            SharedLogger.log("AppGroup FAILED, using .standard")
         }
         load()
     }
 
     public func load() {
-        if let data = defaults.data(forKey: appLibraryKey), let decoded = try? JSONDecoder().decode([LauncherApplication].self, from: data) {
-            library = decoded
+        if let data = defaults.data(forKey: appLibraryKey) {
+            do {
+                library = try JSONDecoder().decode([LauncherApplication].self, from: data)
+                SharedLogger.log("Loaded \(library.count) library items")
+            } catch { SharedLogger.log("Decode Err Library: \(error.localizedDescription)") }
         }
-        if let data = defaults.data(forKey: widgetConfigurationsKey), let decoded = try? JSONDecoder().decode([WidgetConfigurationList].self, from: data) {
-            configurations = decoded
+        
+        if let data = defaults.data(forKey: widgetConfigurationsKey) {
+            do {
+                configurations = try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
+                SharedLogger.log("Loaded \(configurations.count) configurations")
+            } catch { SharedLogger.log("Decode Err Configs: \(error.localizedDescription)") }
         }
     }
 
     public func save() {
-        if let libData = try? JSONEncoder().encode(library) { defaults.set(libData, forKey: appLibraryKey) }
-        if let confData = try? JSONEncoder().encode(configurations) { defaults.set(confData, forKey: widgetConfigurationsKey) }
-        WidgetCenter.shared.reloadAllTimelines()
+        do {
+            let libData = try JSONEncoder().encode(library)
+            defaults.set(libData, forKey: appLibraryKey)
+            
+            let confData = try JSONEncoder().encode(configurations)
+            defaults.set(confData, forKey: widgetConfigurationsKey)
+            
+            SharedLogger.log("Save successful. Reloading timelines.")
+            WidgetCenter.shared.reloadAllTimelines()
+        } catch {
+            SharedLogger.log("Save Err: \(error.localizedDescription)")
+        }
     }
 
     public func addToLibrary(_ app: LauncherApplication) {

@@ -9,10 +9,17 @@ struct WidgetDataReader {
     }
 
     static func configurations() -> [WidgetConfigurationList] {
-        guard let data = defaults?.data(forKey: widgetConfigurationsKey) else { return [] }
+        SharedLogger.log("WidgetDataReader reading configs")
+        guard let data = defaults?.data(forKey: widgetConfigurationsKey) else {
+            SharedLogger.log("Err: No data for key \(widgetConfigurationsKey)")
+            return []
+        }
         do {
-            return try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
+            let decoded = try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
+            SharedLogger.log("WidgetDataReader decoded \(decoded.count) configs")
+            return decoded
         } catch {
+            SharedLogger.log("WidgetDataReader Decode Err: \(error.localizedDescription)")
             return []
         }
     }
@@ -20,15 +27,6 @@ struct WidgetDataReader {
     static func configuration(id: String?) -> WidgetConfigurationList? {
         guard let id = id else { return configurations().first }
         return configurations().first(where: { $0.id.uuidString == id })
-    }
-
-    static func getIconURL(fileName: String?) -> URL? {
-        guard let fileName = fileName, !fileName.isEmpty,
-              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { 
-            return nil 
-        }
-        let url = container.appendingPathComponent("DownloadedIcons").appendingPathComponent(fileName)
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 }
 
@@ -53,8 +51,10 @@ struct LauncherStackQuery: EntityQuery {
     }
 
     func suggestedEntities() async throws -> [LauncherStackEntity] {
+        SharedLogger.log("Intent requested suggestedEntities")
         let configs = WidgetDataReader.configurations()
         if configs.isEmpty {
+            SharedLogger.log("Intent found no configs, returning fallback")
             return [LauncherStackEntity(id: "empty_fallback", name: "⚠️ Create a stack in the app")]
         }
         return configs.map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
@@ -89,7 +89,9 @@ struct LauncherProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: SelectLauncherStackIntent, in context: Context) async -> Timeline<LauncherEntry> {
+        SharedLogger.log("Widget timeline requested")
         let selected = WidgetDataReader.configuration(id: configuration.stack?.id)
+        if selected == nil { SharedLogger.log("Timeline selected config is nil") }
         return Timeline(entries: [LauncherEntry(date: .now, configuration: selected)], policy: .after(.now.addingTimeInterval(300)))
     }
 }
@@ -119,13 +121,15 @@ struct StackLaunchWidgetView: View {
             .containerBackground(Color(hex: configuration.backgroundColorHex), for: .widget)
         } else {
             VStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.orange)
-                Text("Long-press to Edit Widget\nor create a stack in the app.")
-                    .font(.caption.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white)
+                Text("Diagnostics")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.red)
+                ScrollView {
+                    Text(SharedLogger.read())
+                        .font(.system(size: 8))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
+                }
             }
             .padding()
             .containerBackground(Color(red: 0.02, green: 0.04, blue: 0.08), for: .widget)
@@ -180,8 +184,7 @@ private struct WidgetIconView: View {
 
     var body: some View {
         Group {
-            if let iconURL = WidgetDataReader.getIconURL(fileName: app.iconFileName),
-               let image = UIImage(contentsOfFile: iconURL.path) {
+            if let image = loadImage() {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -200,6 +203,12 @@ private struct WidgetIconView: View {
             if style == .liquidGlass { RoundedRectangle(cornerRadius: 6).stroke(.white.opacity(0.36), lineWidth: 0.7) }
         }
         .clipShape(.rect(cornerRadius: 5))
+    }
+
+    private func loadImage() -> UIImage? {
+        guard let fileName = app.iconFileName, let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return nil }
+        let url = container.appendingPathComponent("DownloadedIcons").appendingPathComponent(fileName)
+        return UIImage(contentsOfFile: url.path)
     }
 }
 
