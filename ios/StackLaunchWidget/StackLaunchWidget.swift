@@ -1,8 +1,38 @@
-// ios/StackLaunchWidget/StackLaunchWidget.swift
 import AppIntents
 import SwiftUI
 import WidgetKit
 
+// MARK: - Widget Data Reader Sécurisé
+struct WidgetDataReader {
+    static var defaults: UserDefaults? {
+        UserDefaults(suiteName: appGroupIdentifier)
+    }
+
+    static func configurations() -> [WidgetConfigurationList] {
+        guard let data = defaults?.data(forKey: widgetConfigurationsKey) else { return [] }
+        do {
+            return try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
+        } catch {
+            return []
+        }
+    }
+    
+    static func configuration(id: String?) -> WidgetConfigurationList? {
+        guard let id = id else { return configurations().first }
+        return configurations().first(where: { $0.id.uuidString == id })
+    }
+
+    static func getIconURL(fileName: String?) -> URL? {
+        guard let fileName = fileName, !fileName.isEmpty,
+              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { 
+            return nil 
+        }
+        let url = container.appendingPathComponent("DownloadedIcons").appendingPathComponent(fileName)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+}
+
+// MARK: - App Intents & Entités
 struct LauncherStackEntity: AppEntity {
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Launcher Stack"
     static var defaultQuery = LauncherStackQuery()
@@ -17,13 +47,13 @@ struct LauncherStackEntity: AppEntity {
 
 struct LauncherStackQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [LauncherStackEntity] {
-        SharedWidgetReader.configurations()
+        WidgetDataReader.configurations()
             .filter { identifiers.contains($0.id.uuidString) }
             .map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
     }
 
     func suggestedEntities() async throws -> [LauncherStackEntity] {
-        let configs = SharedWidgetReader.configurations()
+        let configs = WidgetDataReader.configurations()
         if configs.isEmpty {
             return [LauncherStackEntity(id: "empty_fallback", name: "⚠️ Create a stack in the app")]
         }
@@ -31,7 +61,7 @@ struct LauncherStackQuery: EntityQuery {
     }
 
     func defaultResult() async -> LauncherStackEntity? {
-        guard let first = SharedWidgetReader.configurations().first else { return nil }
+        guard let first = WidgetDataReader.configurations().first else { return nil }
         return LauncherStackEntity(id: first.id.uuidString, name: first.name)
     }
 }
@@ -51,19 +81,20 @@ struct LauncherEntry: TimelineEntry {
 
 struct LauncherProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> LauncherEntry {
-        LauncherEntry(date: .now, configuration: SharedWidgetReader.configurations().first)
+        LauncherEntry(date: .now, configuration: WidgetDataReader.configurations().first)
     }
 
     func snapshot(for configuration: SelectLauncherStackIntent, in context: Context) async -> LauncherEntry {
-        LauncherEntry(date: .now, configuration: SharedWidgetReader.configuration(id: configuration.stack?.id))
+        LauncherEntry(date: .now, configuration: WidgetDataReader.configuration(id: configuration.stack?.id))
     }
 
     func timeline(for configuration: SelectLauncherStackIntent, in context: Context) async -> Timeline<LauncherEntry> {
-        let selected = SharedWidgetReader.configuration(id: configuration.stack?.id)
+        let selected = WidgetDataReader.configuration(id: configuration.stack?.id)
         return Timeline(entries: [LauncherEntry(date: .now, configuration: selected)], policy: .after(.now.addingTimeInterval(300)))
     }
 }
 
+// MARK: - Vues du Widget
 struct StackLaunchWidgetView: View {
     let entry: LauncherEntry
 
@@ -149,7 +180,7 @@ private struct WidgetIconView: View {
 
     var body: some View {
         Group {
-            if let iconURL = SharedWidgetReader.getIconURL(fileName: app.iconFileName),
+            if let iconURL = WidgetDataReader.getIconURL(fileName: app.iconFileName),
                let image = UIImage(contentsOfFile: iconURL.path) {
                 Image(uiImage: image)
                     .resizable()

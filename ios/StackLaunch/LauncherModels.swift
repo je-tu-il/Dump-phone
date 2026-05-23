@@ -1,4 +1,3 @@
-// ios/StackLaunch/LauncherModels.swift
 import Combine
 import Foundation
 import ImageIO
@@ -6,28 +5,28 @@ import SwiftUI
 import UIKit
 import WidgetKit
 
-let appGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.stacklaunch"
-let widgetConfigurationsKey = "widgetConfigurations"
-let appLibraryKey = "globalAppLibrary"
-let maxAppsPerStack = 10
+public let appGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.stacklaunch"
+public let widgetConfigurationsKey = "widgetConfigurations"
+public let appLibraryKey = "globalAppLibrary"
+public let maxAppsPerStack = 10
 
-nonisolated enum IconStyle: String, Codable, CaseIterable, Identifiable {
+public enum IconStyle: String, Codable, CaseIterable, Identifiable {
     case standard, grayscale, liquidGlass
-    var id: String { rawValue }
-    var title: String { rawValue.capitalized }
+    public var id: String { rawValue }
+    public var title: String { rawValue.capitalized }
 }
 
-nonisolated struct LauncherApplication: Codable, Identifiable, Hashable {
-    var id: UUID
-    var displayName: String
-    var urlScheme: String
-    var symbolName: String
-    var appStoreId: String?
-    var iconRemoteURL: String?
-    var iconFileName: String?
-    var textColorHex: String
+public struct LauncherApplication: Codable, Identifiable, Hashable {
+    public var id: UUID
+    public var displayName: String
+    public var urlScheme: String
+    public var symbolName: String
+    public var appStoreId: String?
+    public var iconRemoteURL: String?
+    public var iconFileName: String?
+    public var textColorHex: String
 
-    init(id: UUID = UUID(), displayName: String, urlScheme: String, symbolName: String = "app.fill", appStoreId: String? = nil, iconRemoteURL: String? = nil, iconFileName: String? = nil, textColorHex: String = "#FFFFFF") {
+    public init(id: UUID = UUID(), displayName: String, urlScheme: String, symbolName: String = "app.fill", appStoreId: String? = nil, iconRemoteURL: String? = nil, iconFileName: String? = nil, textColorHex: String = "#FFFFFF") {
         self.id = id
         self.displayName = displayName
         self.urlScheme = urlScheme
@@ -39,26 +38,26 @@ nonisolated struct LauncherApplication: Codable, Identifiable, Hashable {
     }
 }
 
-nonisolated enum TextAlignmentOption: String, Codable, CaseIterable, Identifiable {
+public enum TextAlignmentOption: String, Codable, CaseIterable, Identifiable {
     case leading, center, trailing
-    var id: String { rawValue }
-    var title: String {
+    public var id: String { rawValue }
+    public var title: String {
         switch self { case .leading: return "Left"; case .center: return "Center"; case .trailing: return "Right" }
     }
 }
 
-nonisolated struct WidgetConfigurationList: Codable, Identifiable, Hashable {
-    let id: UUID
-    var name: String
-    var applicationIds: [UUID]
-    var applications: [LauncherApplication]
-    var itemLimit: Int
-    var textAlignment: TextAlignmentOption
-    var showIcon: Bool
-    var backgroundColorHex: String
-    var iconStyle: IconStyle
+public struct WidgetConfigurationList: Codable, Identifiable, Hashable {
+    public let id: UUID
+    public var name: String
+    public var applicationIds: [UUID]
+    public var applications: [LauncherApplication]
+    public var itemLimit: Int
+    public var textAlignment: TextAlignmentOption
+    public var showIcon: Bool
+    public var backgroundColorHex: String
+    public var iconStyle: IconStyle
 
-    init(id: UUID = UUID(), name: String, applicationIds: [UUID] = [], applications: [LauncherApplication] = [], itemLimit: Int = 4, textAlignment: TextAlignmentOption = .leading, showIcon: Bool = true, backgroundColorHex: String = "#07131F", iconStyle: IconStyle = .standard) {
+    public init(id: UUID = UUID(), name: String, applicationIds: [UUID] = [], applications: [LauncherApplication] = [], itemLimit: Int = 4, textAlignment: TextAlignmentOption = .leading, showIcon: Bool = true, backgroundColorHex: String = "#07131F", iconStyle: IconStyle = .standard) {
         self.id = id
         self.name = name
         self.applicationIds = applicationIds
@@ -70,47 +69,20 @@ nonisolated struct WidgetConfigurationList: Codable, Identifiable, Hashable {
         self.iconStyle = iconStyle
     }
     
-    var visibleApplications: [LauncherApplication] {
+    public var visibleApplications: [LauncherApplication] {
         Array(applications.prefix(min(maxAppsPerStack, max(1, itemLimit))))
     }
 }
 
-struct SharedWidgetReader {
-    static var defaults: UserDefaults? {
-        UserDefaults(suiteName: appGroupIdentifier)
-    }
-
-    static func configurations() -> [WidgetConfigurationList] {
-        guard let data = defaults?.data(forKey: widgetConfigurationsKey) else { return [] }
-        do {
-            return try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
-        } catch {
-            print("Widget Reader Error: \(error)")
-            return []
-        }
-    }
-    
-    static func configuration(id: String?) -> WidgetConfigurationList? {
-        guard let id = id else { return configurations().first }
-        return configurations().first(where: { $0.id.uuidString == id })
-    }
-
-    static func getIconURL(fileName: String?) -> URL? {
-        guard let fileName = fileName,
-              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return nil }
-        return container.appendingPathComponent("DownloadedIcons").appendingPathComponent(fileName)
-    }
-}
-
 @MainActor
-final class SharedConfigurationStore: ObservableObject {
-    @Published var configurations: [WidgetConfigurationList] = []
-    @Published var library: [LauncherApplication] = []
-    @Published var isAppGroupAvailable: Bool = true
+public final class SharedConfigurationStore: ObservableObject {
+    @Published public var configurations: [WidgetConfigurationList] = []
+    @Published public var library: [LauncherApplication] = []
+    @Published public var isAppGroupAvailable: Bool = true
     
     private let defaults: UserDefaults
 
-    init() {
+    public init() {
         if let groupDefaults = UserDefaults(suiteName: appGroupIdentifier) {
             self.defaults = groupDefaults
             self.isAppGroupAvailable = true
@@ -121,7 +93,7 @@ final class SharedConfigurationStore: ObservableObject {
         load()
     }
 
-    func load() {
+    public func load() {
         if let data = defaults.data(forKey: appLibraryKey) {
             do {
                 library = try JSONDecoder().decode([LauncherApplication].self, from: data)
@@ -135,7 +107,7 @@ final class SharedConfigurationStore: ObservableObject {
         }
     }
 
-    func save() {
+    public func save() {
         do {
             let libData = try JSONEncoder().encode(library)
             defaults.set(libData, forKey: appLibraryKey)
@@ -149,7 +121,7 @@ final class SharedConfigurationStore: ObservableObject {
         }
     }
 
-    func addToLibrary(_ app: LauncherApplication) {
+    public func addToLibrary(_ app: LauncherApplication) {
         if !library.contains(where: { $0.appStoreId == app.appStoreId && $0.displayName == app.displayName }) {
             var newApp = app
             newApp.id = UUID()
@@ -159,29 +131,29 @@ final class SharedConfigurationStore: ObservableObject {
         }
     }
 
-    func addBulkToLibrary(_ apps: [LauncherApplication]) {
+    public func addBulkToLibrary(_ apps: [LauncherApplication]) {
         for app in apps { addToLibrary(app) }
     }
 
-    func deleteFromLibrary(at offsets: IndexSet) {
+    public func deleteFromLibrary(at offsets: IndexSet) {
         library.remove(atOffsets: offsets)
         save()
     }
     
-    func updateLibraryApp(_ app: LauncherApplication) {
+    public func updateLibraryApp(_ app: LauncherApplication) {
         if let index = library.firstIndex(where: { $0.id == app.id }) {
             library[index] = app
             save()
         }
     }
 
-    func addConfiguration() {
+    public func addConfiguration() {
         let selected = Array(library.prefix(4))
         configurations.append(WidgetConfigurationList(name: "Nouvelle Pile", applications: selected, itemLimit: 4, textAlignment: .leading))
         save()
     }
 
-    func update(_ configuration: WidgetConfigurationList) {
+    public func update(_ configuration: WidgetConfigurationList) {
         if let index = configurations.firstIndex(where: { $0.id == configuration.id }) {
             var copy = configuration
             copy.applicationIds = Array(copy.applicationIds.prefix(maxAppsPerStack))
@@ -191,7 +163,7 @@ final class SharedConfigurationStore: ObservableObject {
         }
     }
 
-    func delete(at offsets: IndexSet) {
+    public func delete(at offsets: IndexSet) {
         configurations.remove(atOffsets: offsets)
         save()
     }
