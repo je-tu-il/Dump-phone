@@ -240,71 +240,30 @@ struct AppCatalogView: View {
     var body: some View {
         List {
 ForEach(filteredApps, id: \.id) { app in
-    let inLibrary = store.isInLibrary(app)
-                let isSelected = selectedIds.contains(app.id)
-                Button {
-                    if !inLibrary {
-                        if isSelected { selectedIds.remove(app.id) } else { selectedIds.insert(app.id) }
-                    }
-                } label: {
-                    HStack(spacing: 14) {
-                        Image(systemName: app.iconName ?? "app.fill")
-                            .font(.title3)
-                            .foregroundStyle(inLibrary ? .secondary : .cyan)
-                            .frame(width: 32, height: 32)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(app.name)
-                                .font(.body.weight(.medium))
-                                .foregroundStyle(inLibrary ? .secondary : .primary)
-                            Text(app.urlScheme)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-
-                        Spacer()
-
-                        if inLibrary {
-                            Text("In Library")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.green)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(.green.opacity(0.15), in: Capsule())
-                        } else {
-                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                .font(.title3)
-                                .foregroundStyle(isSelected ? .orange : .secondary)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                    .contentShape(Rectangle())
-                }
-                .disabled(inLibrary)
+    let inLibrary = store.library.contains(where: { $0.appStoreId == app.appStoreId })
+    let isSelected = selectedIds.contains(app.id)
+    
+    Button {
+        if !inLibrary {
+            if isSelected { 
+                selectedIds.remove(app.id) 
+            } else { 
+                selectedIds.insert(app.id) 
             }
         }
-        .navigationTitle("App Catalog")
-        .searchable(text: $searchText, prompt: "Search apps…")
-        .safeAreaInset(edge: .bottom) {
-            if !selectedIds.isEmpty {
-                Button {
-                    let apps = selectedIds.compactMap { PredefinedAppsDatabase.allById[$0]?.launcherApplication }
-                    store.addBulkToLibrary(apps)
-                    dismiss()
-                } label: {
-                    Text("Add \(selectedIds.count) to Library")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(.orange, in: RoundedRectangle(cornerRadius: 16))
-                        .foregroundStyle(.white)
-                }
-                .padding()
-                .background(.ultraThinMaterial)
-            }
+    } label: {
+        HStack(spacing: 14) {
+            AppIconPreview(app: app.launcherApplication)
+                .frame(width: 30, height: 30)
+            Text(app.name)
+            Spacer()
+            Image(systemName: inLibrary ? "checkmark.circle.fill" : (isSelected ? "checkmark.circle" : "plus.circle"))
+                .foregroundStyle(inLibrary ? .gray : (isSelected ? .cyan : .primary))
         }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
+    .disabled(inLibrary)
 }
 
 // MARK: - Shared Rows
