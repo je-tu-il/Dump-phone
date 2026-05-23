@@ -10,10 +10,13 @@ public let widgetConfigurationsKey = "widgetConfigurations"
 public let appLibraryKey = "globalAppLibrary"
 public let maxAppsPerStack = 10
 
-// MARK: - Système de Diagnostic
-public struct SharedLogger {
+// MARK: - Système de Diagnostic Unifié
+public struct AppGroupLogger {
     public static func log(_ message: String) {
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return }
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
+            print("LOG ERR: Pas de conteneur App Group")
+            return
+        }
         let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
@@ -33,9 +36,9 @@ public struct SharedLogger {
     }
     
     public static func read() -> String {
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return "Err: No App Group Container" }
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return "Err: No Container" }
         let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
-        return (try? String(contentsOf: logFile)) ?? "Err: No logs readable"
+        return (try? String(contentsOf: logFile)) ?? "Err: No log file found"
     }
     
     public static func clear() {
@@ -136,7 +139,7 @@ extension Color {
     }
 }
 
-// MARK: - Stockage des images (Version d'origine restaurée)
+// MARK: - Stockage des images
 @MainActor
 public enum SharedIconStorage {
     static func containerURL() -> URL? {
@@ -162,7 +165,7 @@ public enum SharedIconStorage {
             try FileManager.default.removeItem(at: destination)
         }
         try downsampled.write(to: destination, options: .atomic)
-        SharedLogger.log("Icon saved: \(fileName)")
+        AppGroupLogger.log("APP: Icon saved to \(fileName)")
         return fileName
     }
 
@@ -244,16 +247,16 @@ public final class SharedConfigurationStore: ObservableObject {
     private let defaults: UserDefaults
 
     public init() {
-        SharedLogger.clear()
-        SharedLogger.log("Store Init Started")
+        AppGroupLogger.clear()
+        AppGroupLogger.log("APP: Store Init Started")
         if let groupDefaults = UserDefaults(suiteName: appGroupIdentifier) {
             self.defaults = groupDefaults
             self.isAppGroupAvailable = true
-            SharedLogger.log("AppGroup linked")
+            AppGroupLogger.log("APP: AppGroup linked")
         } else {
             self.defaults = .standard
             self.isAppGroupAvailable = false
-            SharedLogger.log("AppGroup FAILED, using .standard")
+            AppGroupLogger.log("APP: AppGroup FAILED, using .standard")
         }
         load()
     }
@@ -262,15 +265,15 @@ public final class SharedConfigurationStore: ObservableObject {
         if let data = defaults.data(forKey: appLibraryKey) {
             do {
                 library = try JSONDecoder().decode([LauncherApplication].self, from: data)
-                SharedLogger.log("Loaded \(library.count) library items")
-            } catch { SharedLogger.log("Decode Err Library: \(error.localizedDescription)") }
+                AppGroupLogger.log("APP: Loaded \(library.count) library items")
+            } catch { AppGroupLogger.log("APP: Decode Err Library - \(error.localizedDescription)") }
         }
         
         if let data = defaults.data(forKey: widgetConfigurationsKey) {
             do {
                 configurations = try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
-                SharedLogger.log("Loaded \(configurations.count) configurations")
-            } catch { SharedLogger.log("Decode Err Configs: \(error.localizedDescription)") }
+                AppGroupLogger.log("APP: Loaded \(configurations.count) configurations")
+            } catch { AppGroupLogger.log("APP: Decode Err Configs - \(error.localizedDescription)") }
         }
     }
 
@@ -282,10 +285,10 @@ public final class SharedConfigurationStore: ObservableObject {
             let confData = try JSONEncoder().encode(configurations)
             defaults.set(confData, forKey: widgetConfigurationsKey)
             
-            SharedLogger.log("Save successful. Reloading timelines.")
+            AppGroupLogger.log("APP: Save successful. Forcing Widget reload.")
             WidgetCenter.shared.reloadAllTimelines()
         } catch {
-            SharedLogger.log("Save Err: \(error.localizedDescription)")
+            AppGroupLogger.log("APP: Save Err - \(error.localizedDescription)")
         }
     }
 

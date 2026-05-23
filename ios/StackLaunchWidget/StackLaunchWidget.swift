@@ -2,19 +2,24 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-let widgetAppGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.stacklaunch"
-
-// MARK: - Widget Data Reader Sécurisé & Allégé
+// MARK: - Widget Data Reader
 struct WidgetDataReader {
     static var defaults: UserDefaults? {
-        UserDefaults(suiteName: widgetAppGroupIdentifier)
+        UserDefaults(suiteName: appGroupIdentifier)
     }
 
     static func configurations() -> [WidgetConfigurationList] {
-        guard let data = defaults?.data(forKey: "widgetConfigurations") else { return [] }
+        AppGroupLogger.log("WIDGET: Reading configs")
+        guard let data = defaults?.data(forKey: widgetConfigurationsKey) else {
+            AppGroupLogger.log("WIDGET: No data for key \(widgetConfigurationsKey)")
+            return []
+        }
         do {
-            return try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
+            let decoded = try JSONDecoder().decode([WidgetConfigurationList].self, from: data)
+            AppGroupLogger.log("WIDGET: Decoded \(decoded.count) configs")
+            return decoded
         } catch {
+            AppGroupLogger.log("WIDGET: Decode Err: \(error.localizedDescription)")
             return []
         }
     }
@@ -24,11 +29,10 @@ struct WidgetDataReader {
         return configurations().first(where: { $0.id.uuidString == id })
     }
 
-    // OPTIMISATION: Suppression de fileExists qui surchargeait le thread de rendu.
-    // UIImage retournera simplement nil si le fichier n'est pas là.
     static func getIconURL(fileName: String?) -> URL? {
         guard let fileName = fileName, !fileName.isEmpty,
-              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: widgetAppGroupIdentifier) else { 
+              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { 
+            AppGroupLogger.log("WIDGET: Failed to build icon path for \(fileName ?? "nil")")
             return nil 
         }
         return container.appendingPathComponent("DownloadedIcons").appendingPathComponent(fileName)
@@ -56,9 +60,11 @@ struct LauncherStackQuery: EntityQuery {
     }
 
     func suggestedEntities() async throws -> [LauncherStackEntity] {
+        AppGroupLogger.log("WIDGET INTENT: requested suggestedEntities")
         let configs = WidgetDataReader.configurations()
         if configs.isEmpty {
-            return [LauncherStackEntity(id: "empty_fallback", name: "⚠️ Create a stack in the app")]
+            AppGroupLogger.log("WIDGET INTENT: found no configs, returning fallback")
+            return [LauncherStackEntity(id: "empty_fallback", name: "⚠️ Diagnostics")]
         }
         return configs.map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
     }
@@ -92,12 +98,14 @@ struct LauncherProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: SelectLauncherStackIntent, in context: Context) async -> Timeline<LauncherEntry> {
+        AppGroupLogger.log("WIDGET: Timeline requested")
         let selected = WidgetDataReader.configuration(id: configuration.stack?.id)
+        if selected == nil { AppGroupLogger.log("WIDGET: Timeline selected config is nil") }
         return Timeline(entries: [LauncherEntry(date: .now, configuration: selected)], policy: .after(.now.addingTimeInterval(300)))
     }
 }
 
-// MARK: - Vues du Widget (Optimisées pour le Render Server)
+// MARK: - Vues du Widget (GPU Optimisé)
 struct StackLaunchWidgetView: View {
     let entry: LauncherEntry
 
@@ -121,17 +129,17 @@ struct StackLaunchWidgetView: View {
             .padding(14)
             .containerBackground(Color(hex: configuration.backgroundColorHex), for: .widget)
         } else {
-            VStack(spacing: 8) {
-                Image(systemName: "square.grid.2x2")
-                    .font(.title)
-                    .foregroundStyle(.gray)
-                Text("Select a Stack")
-                    .font(.caption.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.gray)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Diagnostic Log")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.red)
+                Text(AppGroupLogger.read())
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .padding()
-            .containerBackground(Color(red: 0.05, green: 0.05, blue: 0.08), for: .widget)
+            .containerBackground(Color(red: 0.1, green: 0.1, blue: 0.12), for: .widget)
         }
     }
 
@@ -165,8 +173,6 @@ private struct LauncherLinkRow: View {
         .background(rowBackground)
     }
 
-    // OPTIMISATION: .ultraThinMaterial est trop lourd pour le Widget Server si répété.
-    // Remplacé par des opacités simples qui imitent le rendu sans crasher le GPU.
     @ViewBuilder
     private var rowBackground: some View {
         if configuration.iconStyle == .liquidGlass {
