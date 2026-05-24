@@ -1,4 +1,3 @@
-// ios/StackLaunch/ContentView.swift
 import SwiftUI
 import WidgetKit
 
@@ -27,6 +26,13 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    Section("Système") {
+                        NavigationLink {
+                            DiagnosticView()
+                        } label: {
+                            Label("Diagnostics & Logs", systemImage: "terminal.fill")
+                        }
+                    }
                 }
                 .scrollContentBackground(.hidden)
             }
@@ -48,6 +54,31 @@ struct ContentView: View {
         }
         .padding(22)
         .background(.ultraThinMaterial, in: .rect(cornerRadius: 30))
+    }
+}
+
+private struct DiagnosticView: View {
+    @State private var logContent: String = AppGroupLogger.read()
+    
+    var body: some View {
+        ScrollView {
+            Text(logContent)
+                .font(.system(size: 11, design: .monospaced))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+        }
+        .navigationTitle("Diagnostics")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Rafraîchir") { logContent = AppGroupLogger.read() }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Purger", role: .destructive) {
+                    AppGroupLogger.clear()
+                    logContent = AppGroupLogger.read()
+                }
+            }
+        }
     }
 }
 
@@ -121,9 +152,7 @@ private struct LibraryView: View {
                 Button { showingBulk = true } label: { Label("Bulk import App Store IDs", systemImage: "square.and.arrow.down.on.square.fill") } 
             }
             Section("My Saved Library Apps") { 
-                ForEach(store.library) { app in 
-                    SelectedApplicationRow(app: app, store: store) 
-                }
+                ForEach(store.library) { app in SelectedApplicationRow(app: app, store: store) }
                 .onDelete(perform: store.deleteFromLibrary)
             }
         }
@@ -148,18 +177,10 @@ private struct AddAppLookupView: View {
     let onAdd: (LauncherApplication) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var input = ""
-    @State private var searchText = ""
     @State private var isLoading = false
     @State private var errorMessage: String?
-    @State private var showingTutorial = false
-    @State private var selectedIds: Set<String> = []
-    @FocusState private var focusedField: Field?
+    @FocusState private var focusedField: Bool
     private let lookupService = ITunesAppLookupService()
-    enum Field: Hashable { case lookup, search }
-    
-    private var filteredApps: [PredefinedApp] { 
-        searchText.isEmpty ? PredefinedAppsDatabase.all : PredefinedAppsDatabase.all.filter { $0.name.localizedStandardContains(searchText) || $0.appStoreId.localizedStandardContains(searchText) } 
-    }
     
     var body: some View { 
         NavigationStack { 
@@ -169,84 +190,23 @@ private struct AddAppLookupView: View {
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .focused($focusedField, equals: .lookup)
+                        .focused($focusedField)
                         .submitLabel(.search)
                         .onSubmit { Task { await lookupAndAdd() } }
-                    Button { 
-                        Task { await lookupAndAdd() } 
-                    } label: { 
-                        isLoading ? AnyView(ProgressView()) : AnyView(Label("Fetch from iTunes Search API", systemImage: "icloud.and.arrow.down.fill")) 
-                    }
-                    .disabled(isLoading || ITunesAppLookupService.extractAppStoreId(from: input).isEmpty)
-                    Button("How to find an App ID?") { showingTutorial = true } 
-                } footer: { 
-                    Text(errorMessage ?? "Artwork is downsampled and saved to the shared App Group for widget access.") 
-                }
-                
-                Section("Predefined catalog (Select to add to your library)") { 
-                    TextField("Search known apps", text: $searchText)
-                        .focused($focusedField, equals: .search)
-                        .onSubmit { focusedField = nil }
-                    
-                    ForEach(filteredApps, id: \.id) { app in
-                        let isSelected = selectedIds.contains(app.id)
-                        Button {
-                            if isSelected {
-                                selectedIds.remove(app.id)
-                            } else {
-                                selectedIds.insert(app.id)
-                            }
-                        } label: {
-                            HStack(spacing: 14) {
-                                AppIconPreview(app: app.launcherApplication)
-                                    .frame(width: 30, height: 30)
-                                Text(app.name)
-                                Spacer()
-                                Image(systemName: isSelected ? "checkmark.circle.fill" : "plus.circle")
-                                    .foregroundStyle(isSelected ? .cyan : .primary)
-                            }
-                            .padding(.vertical, 4)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    } 
-                } 
+                    Button { Task { await lookupAndAdd() } } label: { 
+                        isLoading ? AnyView(ProgressView()) : AnyView(Label("Fetch from iTunes API", systemImage: "icloud.and.arrow.down.fill")) 
+                    }.disabled(isLoading || ITunesAppLookupService.extractAppStoreId(from: input).isEmpty)
+                } footer: { Text(errorMessage ?? "L'icône sera téléchargée et partagée avec le Widget.") }
             }
-            .navigationTitle("Catalog Browser")
-            .toolbar { 
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(selectedIds.isEmpty ? "Done" : "Add Selected (\(selectedIds.count))") {
-                        for id in selectedIds {
-                            if let app = PredefinedAppsDatabase.all.first(where: { $0.id == id }) {
-                                onAdd(app.launcherApplication)
-                            }
-                        }
-                        dismiss()
-                    }
-                }
-            }
-            .alert("How to find an App ID", isPresented: $showingTutorial) { 
-                Button("Got it", role: .cancel) {} 
-            } message: { 
-                Text("Open an App Store link and look for the number after /id. In apps.apple.com/app/name/id123456789, the App ID is 123456789.") 
-            } 
+            .navigationTitle("Add App")
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } } }
         } 
     }
     
     private func lookupAndAdd() async { 
-        focusedField = nil
-        isLoading = true
-        errorMessage = nil
-        do { 
-            onAdd(try await lookupService.lookup(input: input))
-            input = ""
-            dismiss() 
-        } catch { 
-            errorMessage = "Could not fetch that app. Check the ID or URL and try again." 
-        }
+        focusedField = false; isLoading = true; errorMessage = nil
+        do { onAdd(try await lookupService.lookup(input: input)); dismiss() } 
+        catch { errorMessage = "Could not fetch app." }
         isLoading = false 
     }
 }
@@ -256,37 +216,19 @@ private struct BulkImportView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var idsText = ""
     @State private var isImporting = false
-    @State private var importedCount = 0
     @FocusState private var editorFocused: Bool
     private let lookupService = ITunesAppLookupService()
     var body: some View {
         NavigationStack {
             List {
-                Section("Paste IDs") {
-                    TextEditor(text: $idsText)
-                        .frame(minHeight: 180)
-                        .focused($editorFocused)
-                    Text("Use commas or new lines. Example: 389801252, 324684580")
-                }
+                Section("Paste IDs") { TextEditor(text: $idsText).frame(minHeight: 180).focused($editorFocused) }
                 Section {
-                    Button { Task { await importApps() } } label: {
-                        if isImporting {
-                            ProgressView()
-                        } else {
-                            Label("Import apps", systemImage: "arrow.down.circle.fill")
-                        }
-                    }
-                    .disabled(isImporting || idsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    if importedCount > 0 {
-                        Text("Imported \(importedCount) apps")
-                    }
+                    Button { Task { await importApps() } } label: { isImporting ? AnyView(ProgressView()) : AnyView(Text("Import apps")) }
                 }
-            }
-            .navigationTitle("Bulk Import")
-            .toolbar { Button("Done") { dismiss() } }
+            }.navigationTitle("Bulk Import").toolbar { Button("Done") { dismiss() } }
         }
     }
-    private func importApps() async { editorFocused = false; isImporting = true; let apps = await lookupService.bulkLookup(idsText: idsText); store.addBulkToLibrary(apps); importedCount = apps.count; isImporting = false }
+    private func importApps() async { editorFocused = false; isImporting = true; store.addBulkToLibrary(await lookupService.bulkLookup(idsText: idsText)); isImporting = false; dismiss() }
 }
 
 private struct SelectedApplicationRow: View {
@@ -302,5 +244,3 @@ private struct AppIconPreview: View {
     var body: some View { Group { if let image = loadImage() { Image(uiImage: image).resizable().scaledToFill() } else { Image(systemName: app.symbolName).foregroundStyle(.cyan).frame(maxWidth: .infinity, maxHeight: .infinity).background(.cyan.opacity(0.14)) } }.clipShape(.rect(cornerRadius: 8)) }
     private func loadImage() -> UIImage? { guard let fileName = app.iconFileName, let directory = try? SharedIconStorage.iconsDirectoryURL() else { return nil }; return UIImage(contentsOfFile: directory.appendingPathComponent(fileName).path) }
 }
-
-#Preview { ContentView() }

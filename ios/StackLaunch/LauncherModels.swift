@@ -12,7 +12,28 @@ public let maxAppsPerStack = 10
 
 public struct AppGroupLogger {
     public static func log(_ message: String) {
-        print("StackLaunch: \(message)")
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return }
+        let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
+        let entry = "[\(Date().formatted(date: .omitted, time: .standard))] \(message)\n"
+        if let data = entry.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logFile.path) {
+                if let handle = try? FileHandle(forWritingTo: logFile) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                }
+            } else { try? data.write(to: logFile) }
+        }
+    }
+    
+    public static func read() -> String {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return "Err: No Container" }
+        return (try? String(contentsOf: container.appendingPathComponent("stacklaunch_debug.txt"))) ?? "No logs found."
+    }
+    
+    public static func clear() {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return }
+        try? FileManager.default.removeItem(at: container.appendingPathComponent("stacklaunch_debug.txt"))
     }
 }
 
@@ -130,6 +151,7 @@ public enum SharedIconStorage {
             try FileManager.default.removeItem(at: destination)
         }
         try downsampled.write(to: destination, options: .atomic)
+        AppGroupLogger.log("APP: Icon saved to \(fileName)")
         return fileName
     }
 
@@ -211,6 +233,7 @@ public final class SharedConfigurationStore: ObservableObject {
     }
 
     public func load() {
+        AppGroupLogger.log("APP: Store Init/Load")
         if let data = defaults.data(forKey: appLibraryKey), let decoded = try? JSONDecoder().decode([LauncherApplication].self, from: data) {
             library = decoded
         }
@@ -222,6 +245,7 @@ public final class SharedConfigurationStore: ObservableObject {
     public func save() {
         if let lib = try? JSONEncoder().encode(library) { defaults.set(lib, forKey: appLibraryKey) }
         if let conf = try? JSONEncoder().encode(configurations) { defaults.set(conf, forKey: widgetConfigurationsKey) }
+        AppGroupLogger.log("APP: Saved \(configurations.count) configs. Triggering Widget reload.")
         WidgetCenter.shared.reloadAllTimelines()
     }
 
