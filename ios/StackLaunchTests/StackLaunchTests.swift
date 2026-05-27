@@ -1,14 +1,14 @@
 //
-//  StealthRecorderTests.swift
-//  StealthRecorderTests
+//  StackLaunchTests.swift
+//  StackLaunchTests
 //
-//  Created by Rork on May 23, 2026.
+//  Created by Rork on May 21, 2026.
 //
 
 import Testing
-@testable import StealthRecorder
+@testable import StackLaunch
 
-struct StealthRecorderTests {
+struct StackLaunchTests {
 
     @Test func example() async throws {
         // Write your test here and use APIs like `#expect(...)` to check expected conditions.

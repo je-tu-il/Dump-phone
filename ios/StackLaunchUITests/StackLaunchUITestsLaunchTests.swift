@@ -1,13 +1,13 @@
 //
-//  StealthRecorderUITestsLaunchTests.swift
-//  StealthRecorderUITests
+//  StackLaunchUITestsLaunchTests.swift
+//  StackLaunchUITests
 //
-//  Created by Rork on May 23, 2026.
+//  Created by Rork on May 21, 2026.
 //
 
 import XCTest
 
-final class StealthRecorderUITestsLaunchTests: XCTestCase {
+final class StackLaunchUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

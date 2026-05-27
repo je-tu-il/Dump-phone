@@ -6,44 +6,73 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		XX79BD96655804269F263AXX /* StackLaunchWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = XX7065647A8BDC2532F4EAXX /* StackLaunchWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		105FC58A2E9EAD3200EA8BCF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 105FC5722E9EAD3100EA8BCF /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 105FC5792E9EAD3100EA8BCF;
-			remoteInfo = StealthRecorder;
+			remoteInfo = StackLaunch;
 		};
 		105FC5942E9EAD3200EA8BCF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 105FC5722E9EAD3100EA8BCF /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 105FC5792E9EAD3100EA8BCF;
-			remoteInfo = StealthRecorder;
+			remoteInfo = StackLaunch;
+		};
+		XX529D2BECA81995475199XX /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 105FC5722E9EAD3100EA8BCF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = XXE54D14E00DD6CFA20285XX;
+			remoteInfo = StackLaunchWidget;
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		XX3550BE1F8792005BB652XX /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				XX79BD96655804269F263AXX /* StackLaunchWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
-		105FC57A2E9EAD3100EA8BCF /* StealthRecorder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StealthRecorder.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		105FC5892E9EAD3200EA8BCF /* StealthRecorderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StealthRecorderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		105FC5932E9EAD3200EA8BCF /* StealthRecorderUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StealthRecorderUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		105FC57A2E9EAD3100EA8BCF /* StackLaunch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StackLaunch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		105FC5892E9EAD3200EA8BCF /* StackLaunchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StackLaunchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		105FC5932E9EAD3200EA8BCF /* StackLaunchUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StackLaunchUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		XX7065647A8BDC2532F4EAXX /* StackLaunchWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StackLaunchWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		XXF5847F5D833763BCA936XX /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = XXE54D14E00DD6CFA20285XX /* StackLaunchWidget */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		105FC57C2E9EAD3100EA8BCF /* StealthRecorder */ = {
+		XX36B15BEE7D5EA0161CFBXX /* StackLaunchWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = StealthRecorder;
+			path = StackLaunchWidget;
 			sourceTree = "<group>";
-		};
-		105FC58C2E9EAD3200EA8BCF /* StealthRecorderTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = StealthRecorderTests;
-			sourceTree = "<group>";
-		};
-		105FC5962E9EAD3200EA8BCF /* StealthRecorderUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = StealthRecorderUITests;
-			sourceTree = "<group>";
+			exceptions = (
+				XXF5847F5D833763BCA936XX /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -69,25 +98,52 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		XX75B8358D2242CEB782C5XX /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		105FC57C2E9EAD3100EA8BCF /* StackLaunch */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StackLaunch;
+			sourceTree = "<group>";
+		};
+		105FC58C2E9EAD3200EA8BCF /* StackLaunchTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StackLaunchTests;
+			sourceTree = "<group>";
+		};
+		105FC5962E9EAD3200EA8BCF /* StackLaunchUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StackLaunchUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXGroup section */
 		105FC5712E9EAD3100EA8BCF = {
 			isa = PBXGroup;
 			children = (
-				105FC57C2E9EAD3100EA8BCF /* StealthRecorder */,
-				105FC58C2E9EAD3200EA8BCF /* StealthRecorderTests */,
-				105FC5962E9EAD3200EA8BCF /* StealthRecorderUITests */,
+				105FC57C2E9EAD3100EA8BCF /* StackLaunch */,
+				105FC58C2E9EAD3200EA8BCF /* StackLaunchTests */,
+				105FC5962E9EAD3200EA8BCF /* StackLaunchUITests */,
 				105FC57B2E9EAD3100EA8BCF /* Products */,
+				XX36B15BEE7D5EA0161CFBXX /* StackLaunchWidget */,
 			);
 			sourceTree = "<group>";
 		};
 		105FC57B2E9EAD3100EA8BCF /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				105FC57A2E9EAD3100EA8BCF /* StealthRecorder.app */,
-				105FC5892E9EAD3200EA8BCF /* StealthRecorderTests.xctest */,
-				105FC5932E9EAD3200EA8BCF /* StealthRecorderUITests.xctest */,
+				105FC57A2E9EAD3100EA8BCF /* StackLaunch.app */,
+				105FC5892E9EAD3200EA8BCF /* StackLaunchTests.xctest */,
+				105FC5932E9EAD3200EA8BCF /* StackLaunchUITests.xctest */,
+				XX7065647A8BDC2532F4EAXX /* StackLaunchWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,31 +151,33 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		105FC5792E9EAD3100EA8BCF /* StealthRecorder */ = {
+		105FC5792E9EAD3100EA8BCF /* StackLaunch */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 105FC59D2E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StealthRecorder" */;
+			buildConfigurationList = 105FC59D2E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StackLaunch" */;
 			buildPhases = (
 				105FC5762E9EAD3100EA8BCF /* Sources */,
 				105FC5772E9EAD3100EA8BCF /* Frameworks */,
 				105FC5782E9EAD3100EA8BCF /* Resources */,
+				XX3550BE1F8792005BB652XX /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				XX5FB2285FEF02D1F9A2C5XX /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				105FC57C2E9EAD3100EA8BCF /* StealthRecorder */,
+				105FC57C2E9EAD3100EA8BCF /* StackLaunch */,
 			);
-			name = StealthRecorder;
+			name = StackLaunch;
 			packageProductDependencies = (
 			);
-			productName = StealthRecorder;
-			productReference = 105FC57A2E9EAD3100EA8BCF /* StealthRecorder.app */;
+			productName = StackLaunch;
+			productReference = 105FC57A2E9EAD3100EA8BCF /* StackLaunch.app */;
 			productType = "com.apple.product-type.application";
 		};
-		105FC5882E9EAD3200EA8BCF /* StealthRecorderTests */ = {
+		105FC5882E9EAD3200EA8BCF /* StackLaunchTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 105FC5A02E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StealthRecorderTests" */;
+			buildConfigurationList = 105FC5A02E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StackLaunchTests" */;
 			buildPhases = (
 				105FC5852E9EAD3200EA8BCF /* Sources */,
 				105FC5862E9EAD3200EA8BCF /* Frameworks */,
@@ -131,18 +189,18 @@
 				105FC58B2E9EAD3200EA8BCF /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				105FC58C2E9EAD3200EA8BCF /* StealthRecorderTests */,
+				105FC58C2E9EAD3200EA8BCF /* StackLaunchTests */,
 			);
-			name = StealthRecorderTests;
+			name = StackLaunchTests;
 			packageProductDependencies = (
 			);
-			productName = StealthRecorderTests;
-			productReference = 105FC5892E9EAD3200EA8BCF /* StealthRecorderTests.xctest */;
+			productName = StackLaunchTests;
+			productReference = 105FC5892E9EAD3200EA8BCF /* StackLaunchTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		105FC5922E9EAD3200EA8BCF /* StealthRecorderUITests */ = {
+		105FC5922E9EAD3200EA8BCF /* StackLaunchUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 105FC5A32E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StealthRecorderUITests" */;
+			buildConfigurationList = 105FC5A32E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StackLaunchUITests" */;
 			buildPhases = (
 				105FC58F2E9EAD3200EA8BCF /* Sources */,
 				105FC5902E9EAD3200EA8BCF /* Frameworks */,
@@ -154,14 +212,34 @@
 				105FC5952E9EAD3200EA8BCF /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				105FC5962E9EAD3200EA8BCF /* StealthRecorderUITests */,
+				105FC5962E9EAD3200EA8BCF /* StackLaunchUITests */,
 			);
-			name = StealthRecorderUITests;
+			name = StackLaunchUITests;
 			packageProductDependencies = (
 			);
-			productName = StealthRecorderUITests;
-			productReference = 105FC5932E9EAD3200EA8BCF /* StealthRecorderUITests.xctest */;
+			productName = StackLaunchUITests;
+			productReference = 105FC5932E9EAD3200EA8BCF /* StackLaunchUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		XXE54D14E00DD6CFA20285XX /* StackLaunchWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = XX5C6FA20DC1B0A813BBA1XX /* Build configuration list for PBXNativeTarget "StackLaunchWidget" */;
+			buildPhases = (
+				XXE0FD6AFA7551401BFCEBXX /* Sources */,
+				XX75B8358D2242CEB782C5XX /* Frameworks */,
+				XX8DEE49FEB104205DDA8DXX /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StackLaunchWidget;
+			productName = StackLaunchWidget;
+			productReference = XX7065647A8BDC2532F4EAXX /* StackLaunchWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+			fileSystemSynchronizedGroups = (
+				XX36B15BEE7D5EA0161CFBXX /* StackLaunchWidget */,
+			);
 		};
 /* End PBXNativeTarget section */
 
@@ -186,7 +264,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 105FC5752E9EAD3100EA8BCF /* Build configuration list for PBXProject "StealthRecorder" */;
+			buildConfigurationList = 105FC5752E9EAD3100EA8BCF /* Build configuration list for PBXProject "StackLaunch" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -200,9 +278,10 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				105FC5792E9EAD3100EA8BCF /* StealthRecorder */,
-				105FC5882E9EAD3200EA8BCF /* StealthRecorderTests */,
-				105FC5922E9EAD3200EA8BCF /* StealthRecorderUITests */,
+				105FC5792E9EAD3100EA8BCF /* StackLaunch */,
+				105FC5882E9EAD3200EA8BCF /* StackLaunchTests */,
+				105FC5922E9EAD3200EA8BCF /* StackLaunchUITests */,
+				XXE54D14E00DD6CFA20285XX /* StackLaunchWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -223,6 +302,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		105FC5912E9EAD3200EA8BCF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		XX8DEE49FEB104205DDA8DXX /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,18 +339,30 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		XXE0FD6AFA7551401BFCEBXX /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
 		105FC58B2E9EAD3200EA8BCF /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 105FC5792E9EAD3100EA8BCF /* StealthRecorder */;
+			target = 105FC5792E9EAD3100EA8BCF /* StackLaunch */;
 			targetProxy = 105FC58A2E9EAD3200EA8BCF /* PBXContainerItemProxy */;
 		};
 		105FC5952E9EAD3200EA8BCF /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 105FC5792E9EAD3100EA8BCF /* StealthRecorder */;
+			target = 105FC5792E9EAD3100EA8BCF /* StackLaunch */;
 			targetProxy = 105FC5942E9EAD3200EA8BCF /* PBXContainerItemProxy */;
+		};
+		XX5FB2285FEF02D1F9A2C5XX /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = XXE54D14E00DD6CFA20285XX /* StackLaunchWidget */;
+			targetProxy = XX529D2BECA81995475199XX /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -395,22 +493,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = StackLaunch/StackLaunch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access is required to configure video capture based on the selected recording mode.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Location is saved with recordings for gallery reference.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone access is required to configure audio recording.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Photo library access is required to save completed recordings to Photos when selected.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Photo library access is required to save completed recordings to Photos when selected.";
-				INFOPLIST_KEY_UIBackgroundModes = (
-					audio,
-				);
-				INFOPLIST_KEY_UIFileSharingEnabled = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -421,7 +510,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.rork.kqafu7ovw2vaprcg6kky9;
+				PRODUCT_BUNDLE_IDENTIFIER = app.rork.7xhlz1b8jysl5d26x7cks;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -438,22 +527,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = StackLaunch/StackLaunch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access is required to configure video capture based on the selected recording mode.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Location is saved with recordings for gallery reference.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone access is required to configure audio recording.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Photo library access is required to save completed recordings to Photos when selected.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Photo library access is required to save completed recordings to Photos when selected.";
-				INFOPLIST_KEY_UIBackgroundModes = (
-					audio,
-				);
-				INFOPLIST_KEY_UIFileSharingEnabled = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -464,7 +544,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.rork.kqafu7ovw2vaprcg6kky9;
+				PRODUCT_BUNDLE_IDENTIFIER = app.rork.7xhlz1b8jysl5d26x7cks;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -486,7 +566,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "app.rork.kqafu7ovw2vaprcg6kky9.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = app.rork.7xhlz1b8jysl5d26x7cks.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -494,7 +574,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StealthRecorder.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StealthRecorder";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StackLaunch.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StackLaunch";
 			};
 			name = Debug;
 		};
@@ -508,7 +588,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "app.rork.kqafu7ovw2vaprcg6kky9.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = app.rork.7xhlz1b8jysl5d26x7cks.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -516,7 +596,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StealthRecorder.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StealthRecorder";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StackLaunch.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StackLaunch";
 			};
 			name = Release;
 		};
@@ -528,7 +608,7 @@
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "app.rork.kqafu7ovw2vaprcg6kky9.uitests";
+				PRODUCT_BUNDLE_IDENTIFIER = app.rork.7xhlz1b8jysl5d26x7cks.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -536,7 +616,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = StealthRecorder;
+				TEST_TARGET_NAME = StackLaunch;
 			};
 			name = Debug;
 		};
@@ -548,7 +628,7 @@
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "app.rork.kqafu7ovw2vaprcg6kky9.uitests";
+				PRODUCT_BUNDLE_IDENTIFIER = app.rork.7xhlz1b8jysl5d26x7cks.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -556,14 +636,60 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = StealthRecorder;
+				TEST_TARGET_NAME = StackLaunch;
 			};
 			name = Release;
+		};
+		XX34DAFACC333CBD7C310DXX /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StackLaunchWidget/StackLaunchWidget.entitlements;
+				PRODUCT_BUNDLE_IDENTIFIER = app.rork.7xhlz1b8jysl5d26x7cks.stacklaunchwidget;
+				PRODUCT_NAME = StackLaunchWidget;
+				SWIFT_VERSION = 5.0;
+				SDKROOT = iphoneos;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StackLaunchWidget/Info.plist;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				INFOPLIST_KEY_CFBundleDisplayName = "$(PRODUCT_NAME)";
+			};
+			name = Release;
+		};
+		XXC274A6A21A3E570CC9BBXX /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StackLaunchWidget/StackLaunchWidget.entitlements;
+				PRODUCT_BUNDLE_IDENTIFIER = app.rork.7xhlz1b8jysl5d26x7cks.stacklaunchwidget;
+				PRODUCT_NAME = StackLaunchWidget;
+				SWIFT_VERSION = 5.0;
+				SDKROOT = iphoneos;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StackLaunchWidget/Info.plist;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				INFOPLIST_KEY_CFBundleDisplayName = "$(PRODUCT_NAME)";
+			};
+			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		105FC5752E9EAD3100EA8BCF /* Build configuration list for PBXProject "StealthRecorder" */ = {
+		105FC5752E9EAD3100EA8BCF /* Build configuration list for PBXProject "StackLaunch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				105FC59B2E9EAD3200EA8BCF /* Debug */,
@@ -572,7 +698,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		105FC59D2E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StealthRecorder" */ = {
+		105FC59D2E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StackLaunch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				105FC59E2E9EAD3200EA8BCF /* Debug */,
@@ -581,7 +707,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		105FC5A02E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StealthRecorderTests" */ = {
+		105FC5A02E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StackLaunchTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				105FC5A12E9EAD3200EA8BCF /* Debug */,
@@ -590,11 +716,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		105FC5A32E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StealthRecorderUITests" */ = {
+		105FC5A32E9EAD3200EA8BCF /* Build configuration list for PBXNativeTarget "StackLaunchUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				105FC5A42E9EAD3200EA8BCF /* Debug */,
 				105FC5A52E9EAD3200EA8BCF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		XX5C6FA20DC1B0A813BBA1XX /* Build configuration list for PBXNativeTarget "StackLaunchWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				XXC274A6A21A3E570CC9BBXX /* Debug */,
+				XX34DAFACC333CBD7C310DXX /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

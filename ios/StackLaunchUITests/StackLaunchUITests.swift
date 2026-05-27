@@ -1,13 +1,13 @@
 //
-//  StealthRecorderUITests.swift
-//  StealthRecorderUITests
+//  StackLaunchUITests.swift
+//  StackLaunchUITests
 //
-//  Created by Rork on May 23, 2026.
+//  Created by Rork on May 21, 2026.
 //
 
 import XCTest
 
-final class StealthRecorderUITests: XCTestCase {
+final class StackLaunchUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

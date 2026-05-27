@@ -1,8 +1,8 @@
 //
 //  Item.swift
-//  StealthRecorder
+//  StackLaunch
 //
-//  Created by Rork on May 23, 2026.
+//  Created by Rork on May 21, 2026.
 //
 
 import Foundation
