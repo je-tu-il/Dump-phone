@@ -56,6 +56,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		105FC57D2E9EAD3100EA8BCF /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 105FC5792E9EAD3100EA8BCF /* StackLaunch */;
+		};
 		XXF5847F5D833763BCA936XX /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -110,6 +117,9 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		105FC57C2E9EAD3100EA8BCF /* StackLaunch */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				105FC57D2E9EAD3100EA8BCF /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
 			path = StackLaunch;
 			sourceTree = "<group>";
 		};
