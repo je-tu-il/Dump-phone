@@ -2,16 +2,55 @@ import Foundation
 import SwiftUI
 import os
 
-public let appGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.stacklaunch"
+public let defaultAppGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.stacklaunch"
 public let widgetConfigurationsKey = "widgetConfigurations"
 public let appLibraryKey = "globalAppLibrary"
 public let snapshotFileName = "stacklaunch_data.json"
 public let maxAppsPerStack = 10
 
+// MARK: - Résolveur dynamique d'App Group
+public enum AppGroupHelper {
+    public static let fallbackIdentifier = defaultAppGroupIdentifier
+    public static let alternativeIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks"
+
+    public static var activeIdentifier: String {
+        if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: fallbackIdentifier) != nil {
+            return fallbackIdentifier
+        }
+        if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: alternativeIdentifier) != nil {
+            return alternativeIdentifier
+        }
+        if let provisionURL = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+           let content = try? String(contentsOf: provisionURL, encoding: .isoLatin1) {
+            let pattern = #"<string>(group\.[^<]+)</string>"#
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let matches = regex.matches(in: content, range: NSRange(content.startIndex..., in: content))
+                for match in matches {
+                    if let range = Range(match.range(at: 1), in: content) {
+                        let candidate = String(content[range])
+                        if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: candidate) != nil {
+                            return candidate
+                        }
+                    }
+                }
+            }
+        }
+        return fallbackIdentifier
+    }
+
+    public static var containerURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: activeIdentifier)
+    }
+
+    public static var sharedDefaults: UserDefaults? {
+        UserDefaults(suiteName: activeIdentifier)
+    }
+}
+
 // MARK: - Logger partagé pour le widget
 public struct AppGroupLogger {
     public static func log(_ message: String) {
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return }
+        guard let container = AppGroupHelper.containerURL ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
         let entry = "[\(Date().formatted(date: .omitted, time: .standard))] \(message)\n"
         if let data = entry.data(using: .utf8) {
@@ -28,15 +67,15 @@ public struct AppGroupLogger {
     }
     
     public static func read() -> String {
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
-            return "App Group container indisponible sur ce périphérique."
+        guard let container = AppGroupHelper.containerURL ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return "Conteneur inaccessible."
         }
         let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
         return (try? String(contentsOf: logFile, encoding: .utf8)) ?? "Aucun log enregistré."
     }
     
     public static func clear() {
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return }
+        guard let container = AppGroupHelper.containerURL ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         try? FileManager.default.removeItem(at: container.appendingPathComponent("stacklaunch_debug.txt"))
     }
 }
@@ -107,6 +146,16 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
             return URL(string: "\(trimmed)://")
         }
         return nil
+    }
+
+    /// URL universelle pour le WidgetKit: route vers l'app hôte StackLaunch qui ouvre ensuite l'application cible
+    public var widgetLaunchURL: URL? {
+        guard let directURL = parsedURL else { return nil }
+        let targetString = directURL.absoluteString
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-_.~")
+        guard let encoded = targetString.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
+        return URL(string: "stacklaunch://launch?url=\(encoded)")
     }
 }
 
@@ -200,15 +249,18 @@ public enum SharedWidgetReader {
         var configs: [WidgetConfigurationList] = []
 
         // 1. Essai depuis App Group UserDefaults
-        if let defaults = UserDefaults(suiteName: appGroupIdentifier) {
+        if let defaults = AppGroupHelper.sharedDefaults {
             library = decodeOrEmpty([LauncherApplication].self, key: appLibraryKey, defaults: defaults)
             configs = decodeOrEmpty([WidgetConfigurationList].self, key: widgetConfigurationsKey, defaults: defaults)
+            if !configs.isEmpty {
+                AppGroupLogger.log("WIDGET: \(configs.count) piles chargées depuis UserDefaults suite '\(AppGroupHelper.activeIdentifier)'")
+            }
         }
 
         // 2. Essai de secours: Lire le snapshot JSON sur le disque du conteneur partagé
         if configs.isEmpty {
             if let snapshot = loadSnapshotFromFile() {
-                AppGroupLogger.log("WIDGET: Données chargées depuis le fichier JSON partagé")
+                AppGroupLogger.log("WIDGET: \(snapshot.configurations.count) piles chargées depuis le fichier snapshot JSON")
                 library = snapshot.library
                 configs = snapshot.configurations
             }
@@ -219,11 +271,14 @@ public enum SharedWidgetReader {
             let defaults = UserDefaults.standard
             library = decodeOrEmpty([LauncherApplication].self, key: appLibraryKey, defaults: defaults)
             configs = decodeOrEmpty([WidgetConfigurationList].self, key: widgetConfigurationsKey, defaults: defaults)
+            if !configs.isEmpty {
+                AppGroupLogger.log("WIDGET: \(configs.count) piles chargées depuis UserDefaults.standard")
+            }
         }
 
         // 4. Si toujours vide: générer la configuration par défaut avec les applications préinstallées
         if configs.isEmpty {
-            AppGroupLogger.log("WIDGET: Aucune configuration trouvée, utilisation de la pile par défaut")
+            AppGroupLogger.log("WIDGET: Aucune pile enregistrée trouvée, utilisation du secours 'Favoris'")
             configs = [WidgetConfigurationList.defaultStack]
         }
 
@@ -241,7 +296,7 @@ public enum SharedWidgetReader {
 
     public static func iconURL(fileName: String?) -> URL? {
         guard let fileName else { return nil }
-        if let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
+        if let container = AppGroupHelper.containerURL {
             let path = container.appendingPathComponent("DownloadedIcons", isDirectory: true).appendingPathComponent(fileName)
             if FileManager.default.fileExists(atPath: path.path) {
                 return path
@@ -257,7 +312,7 @@ public enum SharedWidgetReader {
     }
 
     private static func loadSnapshotFromFile() -> SharedSnapshot? {
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return nil }
+        guard let container = AppGroupHelper.containerURL else { return nil }
         let fileURL = container.appendingPathComponent(snapshotFileName)
         guard let data = try? Data(contentsOf: fileURL),
               let snapshot = try? JSONDecoder().decode(SharedSnapshot.self, from: data) else { return nil }

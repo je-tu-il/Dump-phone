@@ -11,12 +11,12 @@ struct LauncherStackEntity: AppEntity {
     let name: String
 
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: LocalizedStringResource(stringLiteral: name))
+        DisplayRepresentation(stringLiteral: name)
     }
 }
 
 // MARK: - Requête d'entités pour le Widget
-struct LauncherStackQuery: EntityQuery {
+struct LauncherStackQuery: EntityQuery, EntityStringQuery {
     func entities(for identifiers: [String]) async throws -> [LauncherStackEntity] {
         let configs = SharedWidgetReader.configurations()
         return configs
@@ -26,13 +26,20 @@ struct LauncherStackQuery: EntityQuery {
     
     func suggestedEntities() async throws -> [LauncherStackEntity] {
         let configs = SharedWidgetReader.configurations()
-        AppGroupLogger.log("INTENT: suggestedEntities a trouvé \(configs.count) piles")
+        AppGroupLogger.log("INTENT: suggestedEntities a trouvé \(configs.count) piles : \(configs.map(\.name).joined(separator: ", "))")
         return configs.map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
     }
     
     func defaultResult() async -> LauncherStackEntity? {
         let configs = SharedWidgetReader.configurations()
         return configs.first.map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
+    }
+
+    func entities(matching string: String) async throws -> [LauncherStackEntity] {
+        let configs = SharedWidgetReader.configurations()
+        return configs
+            .filter { $0.name.localizedCaseInsensitiveContains(string) }
+            .map { LauncherStackEntity(id: $0.id.uuidString, name: $0.name) }
     }
 }
 
@@ -103,8 +110,8 @@ private struct SmallWidgetView: View {
         Array(configuration.visibleApplications.prefix(4))
     }
 
-    private var primaryURL: URL? {
-        apps.first?.parsedURL
+    private var primaryLaunchURL: URL? {
+        apps.first?.widgetLaunchURL ?? URL(string: "stacklaunch://")
     }
 
     var body: some View {
@@ -171,7 +178,7 @@ private struct SmallWidgetView: View {
             Spacer(minLength: 0)
         }
         .padding(8)
-        .widgetURL(primaryURL)
+        .widgetURL(primaryLaunchURL)
     }
 }
 
@@ -211,7 +218,7 @@ private struct MediumWidgetView: View {
                 let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
                 LazyVGrid(columns: columns, spacing: 6) {
                     ForEach(apps) { app in
-                        if let url = app.parsedURL {
+                        if let url = app.widgetLaunchURL {
                             Link(destination: url) {
                                 LauncherAppRow(app: app, configuration: configuration)
                             }
@@ -263,7 +270,7 @@ private struct LargeWidgetView: View {
                 let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(apps) { app in
-                        if let url = app.parsedURL {
+                        if let url = app.widgetLaunchURL {
                             Link(destination: url) {
                                 LauncherAppRow(app: app, configuration: configuration, isLarge: true)
                             }

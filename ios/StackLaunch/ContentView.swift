@@ -1057,16 +1057,18 @@ private struct DiagnosticView: View {
     @State private var showingCopiedAlert = false
 
     private var containerPath: String {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)?.path ?? "Non disponible"
+        AppGroupHelper.containerURL?.path ?? "Non disponible"
     }
 
     var body: some View {
         List {
             Section("État du conteneur App Group") {
-                LabeledContent("Identifiant", value: appGroupIdentifier)
-                LabeledContent("Piles actives", value: "\(store.configurations.count)")
+                LabeledContent("Identifiant actif", value: AppGroupHelper.activeIdentifier)
+                LabeledContent("Conteneur partagé", value: AppGroupHelper.containerURL != nil ? "Connecté (OK)" : "Inaccessible")
+                LabeledContent("UserDefaults Suite", value: AppGroupHelper.sharedDefaults != nil ? "Connecté (OK)" : "Inaccessible")
+                LabeledContent("Piles actives", value: "\(store.configurations.count) (\(store.configurations.map(\.name).joined(separator: ", ")))")
                 LabeledContent("Apps enregistrées", value: "\(store.library.count)")
-                LabeledContent("Chemin conteneur", value: containerPath.split(separator: "/").suffix(3).joined(separator: "/"))
+                LabeledContent("Chemin", value: containerPath.split(separator: "/").suffix(3).joined(separator: "/"))
             }
 
             Section("Actions de synchronisation") {

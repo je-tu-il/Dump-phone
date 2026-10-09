@@ -12,12 +12,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Avertissement de Sécurité iOS
-        run: |
-          echo "⚠️ ATTENTION: Cet IPA est compilé sans signature (Unsigned)."
-          echo "Les fonctionnalités liées à l'App Group et au WidgetKit nécessitent obligatoirement des Entitlements signés."
-          echo "Si vous installez cet IPA via TrollStore ou AltStore, le Widget a 99% de chances d'afficher un écran blanc car le système Sandbox d'iOS bloquera UserDefaults(suiteName:)."
-
       - name: Build app without signing
         run: |
           xcodebuild clean build \
@@ -30,10 +24,22 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Package into IPA
+      - name: Embed Entitlements and Package into IPA
         run: |
+          APP_PATH="build_output/Build/Products/Release-iphoneos/StackLaunch.app"
+          WIDGET_PATH="$APP_PATH/PlugIns/StackLaunchWidget.appex"
+          
+          echo "Injection des entitlements App Group via signature ad-hoc..."
+          if [ -d "$WIDGET_PATH" ]; then
+            codesign --force --sign - --entitlements ios/StackLaunchWidget/StackLaunchWidget.entitlements "$WIDGET_PATH"
+          fi
+          codesign --force --sign - --entitlements ios/StackLaunch/StackLaunch.entitlements "$APP_PATH"
+
+          echo "Entitlements intégrés dans l'App :"
+          codesign -d --entitlements :- "$APP_PATH" || true
+          
           mkdir -p Payload
-          cp -r build_output/Build/Products/Release-iphoneos/StackLaunch.app Payload/
+          cp -r "$APP_PATH" Payload/
           zip -r StackLaunch-unsigned.ipa Payload
 
       - name: Upload IPA Artifact
