@@ -161,9 +161,18 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
     public var parsedURL: URL? {
         var trimmed = urlScheme.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        // Remplacer mailto par message:// pour ouvrir Mail directement sans feuille de rédaction
-        if trimmed.lowercased().starts(with: "mailto") {
+        let lower = trimmed.lowercased()
+        // Mail: ouvrir la boîte de réception sans feuille de rédaction
+        if lower.starts(with: "mailto") {
             trimmed = "message://"
+        }
+        // Téléphone: ouvrir le journal d'appels directement sans invite d'appel
+        else if lower.starts(with: "tel:") || lower == "tel://" || lower == "tel:" || lower.starts(with: "mobilephone:") {
+            trimmed = "mobilephone-recents://"
+        }
+        // Appareil photo: rediriger vers Photos si camera:// n'est pas supporté nativement
+        else if lower == "camera://" || lower == "camera:" {
+            trimmed = "photos-redirect://"
         }
         if let direct = URL(string: trimmed) {
             return direct
@@ -191,7 +200,7 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
 
     public static func inferBundleIdentifier(fromScheme scheme: String) -> String? {
         let clean = scheme.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.starts(with: "tel") { return "com.apple.mobilephone" }
+        if clean.starts(with: "tel") || clean.starts(with: "mobilephone") { return "com.apple.mobilephone" }
         if clean.starts(with: "sms") { return "com.apple.MobileSMS" }
         if clean.starts(with: "message") || clean.starts(with: "mailto") { return "com.apple.mobilemail" }
         if clean.starts(with: "photos") { return "com.apple.mobileslideshow" }
@@ -254,7 +263,35 @@ public enum NativeAppLauncher {
     public static func openApp(bundleIdentifier: String?, fallbackURL: URL?) {
         AppGroupLogger.log("LAUNCHER: Ouverture demandée -> BundleID: '\(bundleIdentifier ?? "nil")' | URL: '\(fallbackURL?.absoluteString ?? "nil")'")
 
-        // Résolution du Bundle ID si manquant
+        var finalURL = fallbackURL
+        if let scheme = finalURL?.scheme?.lowercased() {
+            if scheme == "mailto" {
+                finalURL = URL(string: "message://")
+            } else if scheme == "tel" || scheme == "tel:" {
+                finalURL = URL(string: "mobilephone-recents://")
+            }
+        }
+
+        // 1. Priorité absolue: UIApplication.shared.open (transition directe ultra-rapide par SpringBoard)
+        if let url = finalURL {
+            AppGroupLogger.log("LAUNCHER: Ouverture via UIApplication.open pour \(url.absoluteString)")
+            DispatchQueue.main.async {
+                UIApplication.shared.open(url, options: [:]) { success in
+                    AppGroupLogger.log("LAUNCHER: Résultat UIApplication.open -> \(success ? "Succès" : "Échec")")
+                    if !success {
+                        // 2. Si l'URL scheme n'a pas pu s'ouvrir, tenter via le workspace natif
+                        fallbackToWorkspace(bundleIdentifier: bundleIdentifier, fallbackURL: url)
+                    }
+                }
+            }
+            return
+        }
+
+        // 2. Si aucune URL n'est disponible, tenter directement via LSApplicationWorkspace
+        fallbackToWorkspace(bundleIdentifier: bundleIdentifier, fallbackURL: nil)
+    }
+
+    private static func fallbackToWorkspace(bundleIdentifier: String?, fallbackURL: URL?) {
         var resolvedBundleID = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
         if resolvedBundleID == nil || resolvedBundleID!.isEmpty {
             if let scheme = fallbackURL?.scheme {
@@ -262,53 +299,23 @@ public enum NativeAppLauncher {
             }
         }
 
-        // 1. Essai avec LSApplicationWorkspace (ouvre directement l'application à la racine sans dialogue d'action ni compose)
-        if let bundleID = resolvedBundleID, !bundleID.isEmpty {
-            if openViaWorkspace(bundleID: bundleID) {
-                AppGroupLogger.log("LAUNCHER: Succès via LSApplicationWorkspace pour \(bundleID)")
-                suspendCurrentApp()
-                return
-            } else {
-                AppGroupLogger.log("LAUNCHER: Échec ou indisponibilité via LSApplicationWorkspace pour \(bundleID)")
-            }
-        }
+        guard let bundleID = resolvedBundleID, !bundleID.isEmpty else { return }
 
-        // 2. Fallback: UIApplication.shared.open avec l'URL Scheme
-        var finalURL = fallbackURL
-        if let scheme = finalURL?.scheme?.lowercased(), scheme == "mailto" {
-            finalURL = URL(string: "message://")
-        }
-
-        if let url = finalURL {
-            AppGroupLogger.log("LAUNCHER: Ouverture via UIApplication.open pour \(url.absoluteString)")
-            DispatchQueue.main.async {
-                UIApplication.shared.open(url, options: [:]) { success in
-                    AppGroupLogger.log("LAUNCHER: Résultat UIApplication.open -> \(success ? "Succès" : "Échec")")
-                    if !success {
-                        suspendCurrentApp()
-                    }
-                }
-            }
+        if openViaWorkspace(bundleID: bundleID) {
+            AppGroupLogger.log("LAUNCHER: Succès via LSApplicationWorkspace pour \(bundleID)")
+            suspendCurrentApp()
+        } else {
+            AppGroupLogger.log("LAUNCHER: Échec via LSApplicationWorkspace pour \(bundleID)")
         }
     }
 
     public static func suspendCurrentApp() {
         let suspendSel = NSSelectorFromString("suspend")
-        let trigger = {
+        DispatchQueue.main.async {
             if UIApplication.shared.responds(to: suspendSel) {
                 _ = UIApplication.shared.perform(suspendSel)
             }
             UIApplication.shared.sendAction(suspendSel, to: UIApplication.shared, from: nil, for: nil)
-        }
-        
-        DispatchQueue.main.async {
-            trigger()
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-            trigger()
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            trigger()
         }
     }
 

@@ -155,9 +155,18 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
     public var parsedURL: URL? {
         var trimmed = urlScheme.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        // Remplacer mailto par message:// pour ouvrir Mail directement sans feuille de rédaction
-        if trimmed.lowercased().starts(with: "mailto") {
+        let lower = trimmed.lowercased()
+        // Mail: ouvrir la boîte de réception sans feuille de rédaction
+        if lower.starts(with: "mailto") {
             trimmed = "message://"
+        }
+        // Téléphone: ouvrir le journal d'appels directement sans invite d'appel
+        else if lower.starts(with: "tel:") || lower == "tel://" || lower == "tel:" || lower.starts(with: "mobilephone:") {
+            trimmed = "mobilephone-recents://"
+        }
+        // Appareil photo: rediriger vers Photos si camera:// n'est pas supporté nativement
+        else if lower == "camera://" || lower == "camera:" {
+            trimmed = "photos-redirect://"
         }
         if let direct = URL(string: trimmed) {
             return direct
@@ -185,7 +194,7 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
 
     public static func inferBundleIdentifier(fromScheme scheme: String) -> String? {
         let clean = scheme.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.starts(with: "tel") { return "com.apple.mobilephone" }
+        if clean.starts(with: "tel") || clean.starts(with: "mobilephone") { return "com.apple.mobilephone" }
         if clean.starts(with: "sms") { return "com.apple.MobileSMS" }
         if clean.starts(with: "message") || clean.starts(with: "mailto") { return "com.apple.mobilemail" }
         if clean.starts(with: "photos") { return "com.apple.mobileslideshow" }

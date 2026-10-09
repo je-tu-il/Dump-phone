@@ -38,7 +38,7 @@ public enum PredefinedAppsDatabase {
 
     public static let all: [PredefinedApp] = [
         // MARK: - Apple & Système (avec Bundle IDs pour ouverture directe à la racine sans invite)
-        PredefinedApp(name: "Téléphone", urlScheme: "tel://", appStoreId: "0-phone", iconName: "phone.fill", category: appleCategory, bundleIdentifier: "com.apple.mobilephone"),
+        PredefinedApp(name: "Téléphone", urlScheme: "mobilephone-recents://", appStoreId: "0-phone", iconName: "phone.fill", category: appleCategory, bundleIdentifier: "com.apple.mobilephone"),
         PredefinedApp(name: "Messages", urlScheme: "sms://", appStoreId: "0-messages", iconName: "message.fill", category: appleCategory, bundleIdentifier: "com.apple.MobileSMS"),
         PredefinedApp(name: "Mail", urlScheme: "message://", appStoreId: "0-mail", iconName: "envelope.fill", category: appleCategory, bundleIdentifier: "com.apple.mobilemail"),
         PredefinedApp(name: "Safari", urlScheme: "x-web-search://", appStoreId: "0-safari", iconName: "safari.fill", category: appleCategory, bundleIdentifier: "com.apple.mobilesafari"),
@@ -94,7 +94,7 @@ public enum PredefinedAppsDatabase {
 
     public static var defaultFavorites: [LauncherApplication] {
         [
-            LauncherApplication(displayName: "Téléphone", urlScheme: "tel://", symbolName: "phone.fill", appStoreId: "0-phone", bundleIdentifier: "com.apple.mobilephone"),
+            LauncherApplication(displayName: "Téléphone", urlScheme: "mobilephone-recents://", symbolName: "phone.fill", appStoreId: "0-phone", bundleIdentifier: "com.apple.mobilephone"),
             LauncherApplication(displayName: "Messages", urlScheme: "sms://", symbolName: "message.fill", appStoreId: "0-messages", bundleIdentifier: "com.apple.MobileSMS"),
             LauncherApplication(displayName: "Safari", urlScheme: "x-web-search://", symbolName: "safari.fill", appStoreId: "0-safari", bundleIdentifier: "com.apple.mobilesafari"),
             LauncherApplication(displayName: "Photos", urlScheme: "photos-redirect://", symbolName: "photo.fill", appStoreId: "0-photos", bundleIdentifier: "com.apple.mobileslideshow")
