@@ -241,6 +241,9 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
            let encodedBundle = bundle.addingPercentEncoding(withAllowedCharacters: allowed) {
             queryParts.append("bundle=\(encodedBundle)")
         }
+        if let encodedName = displayName.addingPercentEncoding(withAllowedCharacters: allowed) {
+            queryParts.append("name=\(encodedName)")
+        }
         guard !queryParts.isEmpty else { return nil }
         return URL(string: "stacklaunch://launch?\(queryParts.joined(separator: "&"))")
     }
@@ -263,6 +266,7 @@ public enum NativeAppLauncher {
         if let bundleID = resolvedBundleID, !bundleID.isEmpty {
             if openViaWorkspace(bundleID: bundleID) {
                 AppGroupLogger.log("LAUNCHER: Succès via LSApplicationWorkspace pour \(bundleID)")
+                suspendCurrentApp()
                 return
             } else {
                 AppGroupLogger.log("LAUNCHER: Échec ou indisponibilité via LSApplicationWorkspace pour \(bundleID)")
@@ -280,8 +284,31 @@ public enum NativeAppLauncher {
             DispatchQueue.main.async {
                 UIApplication.shared.open(url, options: [:]) { success in
                     AppGroupLogger.log("LAUNCHER: Résultat UIApplication.open -> \(success ? "Succès" : "Échec")")
+                    if !success {
+                        suspendCurrentApp()
+                    }
                 }
             }
+        }
+    }
+
+    public static func suspendCurrentApp() {
+        let suspendSel = NSSelectorFromString("suspend")
+        let trigger = {
+            if UIApplication.shared.responds(to: suspendSel) {
+                _ = UIApplication.shared.perform(suspendSel)
+            }
+            UIApplication.shared.sendAction(suspendSel, to: UIApplication.shared, from: nil, for: nil)
+        }
+        
+        DispatchQueue.main.async {
+            trigger()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            trigger()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            trigger()
         }
     }
 

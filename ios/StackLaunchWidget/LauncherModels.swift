@@ -235,6 +235,9 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
            let encodedBundle = bundle.addingPercentEncoding(withAllowedCharacters: allowed) {
             queryParts.append("bundle=\(encodedBundle)")
         }
+        if let encodedName = displayName.addingPercentEncoding(withAllowedCharacters: allowed) {
+            queryParts.append("name=\(encodedName)")
+        }
         guard !queryParts.isEmpty else { return nil }
         return URL(string: "stacklaunch://launch?\(queryParts.joined(separator: "&"))")
     }
