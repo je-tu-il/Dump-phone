@@ -2,60 +2,183 @@ import Foundation
 import SwiftUI
 import os
 
-let appGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.stacklaunch"
-let widgetConfigurationsKey = "widgetConfigurations"
-let appLibraryKey = "globalAppLibrary"
-let maxAppsPerStack = 10
+public let appGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.stacklaunch"
+public let widgetConfigurationsKey = "widgetConfigurations"
+public let appLibraryKey = "globalAppLibrary"
+public let snapshotFileName = "stacklaunch_data.json"
+public let maxAppsPerStack = 10
 
-nonisolated enum IconStyle: String, Codable, CaseIterable, Identifiable {
-    case standard
-    case grayscale
-    case liquidGlass
-    var id: String { rawValue }
-}
-
-nonisolated struct LauncherApplication: Codable, Identifiable, Hashable {
-    let id: UUID
-    var displayName: String
-    var urlScheme: String
-    var symbolName: String
-    var appStoreId: String?
-    var iconRemoteURL: String?
-    var iconFileName: String?
-    var textColorHex: String
-}
-
-nonisolated enum TextAlignmentOption: String, Codable, CaseIterable, Identifiable {
-    case leading
-    case center
-    case trailing
-    var id: String { rawValue }
-}
-
-nonisolated struct WidgetConfigurationList: Codable, Identifiable, Hashable {
-    let id: UUID
-    var name: String
-    var applicationIds: [UUID]
-    var applications: [LauncherApplication]
-    var itemLimit: Int
-    var textAlignment: TextAlignmentOption
-    var showIcon: Bool
-    var backgroundColorHex: String
-    var iconStyle: IconStyle
-
-    var visibleApplications: [LauncherApplication] {
-        Array(applications.prefix(min(maxAppsPerStack, max(1, itemLimit))))
+// MARK: - Logger partagé pour le widget
+public struct AppGroupLogger {
+    public static func log(_ message: String) {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return }
+        let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
+        let entry = "[\(Date().formatted(date: .omitted, time: .standard))] \(message)\n"
+        if let data = entry.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logFile.path) {
+                if let handle = try? FileHandle(forWritingTo: logFile) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                }
+            } else {
+                try? data.write(to: logFile)
+            }
+        }
+    }
+    
+    public static func read() -> String {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else {
+            return "App Group container indisponible sur ce périphérique."
+        }
+        let logFile = container.appendingPathComponent("stacklaunch_debug.txt")
+        return (try? String(contentsOf: logFile, encoding: .utf8)) ?? "Aucun log enregistré."
+    }
+    
+    public static func clear() {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return }
+        try? FileManager.default.removeItem(at: container.appendingPathComponent("stacklaunch_debug.txt"))
     }
 }
 
+// MARK: - Options de style
+public enum IconStyle: String, Codable, CaseIterable, Identifiable, Sendable {
+    case standard, grayscale, liquidGlass
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .standard: return "Standard"
+        case .grayscale: return "Gris"
+        case .liquidGlass: return "Verre"
+        }
+    }
+}
+
+public enum TextAlignmentOption: String, Codable, CaseIterable, Identifiable, Sendable {
+    case leading, center, trailing
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .leading: return "Gauche"
+        case .center: return "Centre"
+        case .trailing: return "Droite"
+        }
+    }
+}
+
+// MARK: - Modèle d'application
+public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
+    public var id: UUID
+    public var displayName: String
+    public var urlScheme: String
+    public var symbolName: String
+    public var appStoreId: String?
+    public var iconRemoteURL: String?
+    public var iconFileName: String?
+    public var textColorHex: String
+
+    public init(
+        id: UUID = UUID(),
+        displayName: String,
+        urlScheme: String,
+        symbolName: String = "app.fill",
+        appStoreId: String? = nil,
+        iconRemoteURL: String? = nil,
+        iconFileName: String? = nil,
+        textColorHex: String = "#FFFFFF"
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.urlScheme = urlScheme
+        self.symbolName = symbolName
+        self.appStoreId = appStoreId
+        self.iconRemoteURL = iconRemoteURL
+        self.iconFileName = iconFileName
+        self.textColorHex = textColorHex
+    }
+
+    public var parsedURL: URL? {
+        let trimmed = urlScheme.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let direct = URL(string: trimmed) {
+            return direct
+        }
+        if !trimmed.contains("://") && !trimmed.contains(":") {
+            return URL(string: "\(trimmed)://")
+        }
+        return nil
+    }
+}
+
+// MARK: - Modèle de Pile de Widget
+public struct WidgetConfigurationList: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var name: String
+    public var applicationIds: [UUID]
+    public var applications: [LauncherApplication]
+    public var itemLimit: Int
+    public var textAlignment: TextAlignmentOption
+    public var showIcon: Bool
+    public var backgroundColorHex: String
+    public var iconStyle: IconStyle
+
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        applicationIds: [UUID] = [],
+        applications: [LauncherApplication] = [],
+        itemLimit: Int = 4,
+        textAlignment: TextAlignmentOption = .leading,
+        showIcon: Bool = true,
+        backgroundColorHex: String = "#07131F",
+        iconStyle: IconStyle = .standard
+    ) {
+        self.id = id
+        self.name = name
+        let resolvedAppIds = applicationIds.isEmpty ? applications.map(\.id) : applicationIds
+        self.applicationIds = resolvedAppIds
+        self.applications = applications
+        self.itemLimit = min(max(1, itemLimit), maxAppsPerStack)
+        self.textAlignment = textAlignment
+        self.showIcon = showIcon
+        self.backgroundColorHex = backgroundColorHex
+        self.iconStyle = iconStyle
+    }
+
+    public var visibleApplications: [LauncherApplication] {
+        let count = min(maxAppsPerStack, max(1, itemLimit))
+        return Array(applications.prefix(count))
+    }
+
+    public static var defaultStack: WidgetConfigurationList {
+        let defaults = PredefinedAppsDatabase.defaultFavorites
+        return WidgetConfigurationList(
+            name: "Favoris",
+            applicationIds: defaults.map(\.id),
+            applications: defaults,
+            itemLimit: 4,
+            textAlignment: .leading,
+            showIcon: true,
+            backgroundColorHex: "#0D1826",
+            iconStyle: .standard
+        )
+    }
+}
+
+// MARK: - Snapshot partagé
+public struct SharedSnapshot: Codable, Sendable {
+    public let library: [LauncherApplication]
+    public let configurations: [WidgetConfigurationList]
+    public let updatedAt: Date
+}
+
+// MARK: - Extension Color Hex
 extension Color {
-    init(hex: String) {
+    public init(hex: String) {
         let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var value: UInt64 = 0
         Scanner(string: cleaned).scanHexInt64(&value)
-        let r: Double
-        let g: Double
-        let b: Double
+        let r, g, b: Double
         switch cleaned.count {
         case 6:
             r = Double((value >> 16) & 0xFF) / 255
@@ -68,38 +191,104 @@ extension Color {
     }
 }
 
-nonisolated enum SharedWidgetReader {
+// MARK: - Lecteur Résilient pour le Widget
+public enum SharedWidgetReader {
     private static let logger = Logger(subsystem: "app.rork.stacklaunch.widget", category: "SharedWidgetReader")
 
-    static func configurations() -> [WidgetConfigurationList] {
-        guard let defaults = UserDefaults(suiteName: appGroupIdentifier) else {
-            logger.error("App Group container '\(appGroupIdentifier)' is NOT available. Check entitlements and provisioning profile.")
-            return []
+    public static func configurations() -> [WidgetConfigurationList] {
+        var library: [LauncherApplication] = []
+        var configs: [WidgetConfigurationList] = []
+
+        // 1. Essai depuis App Group UserDefaults
+        if let defaults = UserDefaults(suiteName: appGroupIdentifier) {
+            library = decodeOrEmpty([LauncherApplication].self, key: appLibraryKey, defaults: defaults)
+            configs = decodeOrEmpty([WidgetConfigurationList].self, key: widgetConfigurationsKey, defaults: defaults)
         }
-        let library: [LauncherApplication] = decodeOrEmpty([LauncherApplication].self, key: appLibraryKey, defaults: defaults)
-        logger.info("Widget reader loaded \(library.count) library apps")
-        let stacks: [WidgetConfigurationList] = decodeOrEmpty([WidgetConfigurationList].self, key: widgetConfigurationsKey, defaults: defaults)
-        logger.info("Widget reader loaded \(stacks.count) stacks")
-        return stacks.map { hydrate($0, library: library) }
+
+        // 2. Essai de secours: Lire le snapshot JSON sur le disque du conteneur partagé
+        if configs.isEmpty {
+            if let snapshot = loadSnapshotFromFile() {
+                AppGroupLogger.log("WIDGET: Données chargées depuis le fichier JSON partagé")
+                library = snapshot.library
+                configs = snapshot.configurations
+            }
+        }
+
+        // 3. Essai de secours: UserDefaults standard
+        if configs.isEmpty {
+            let defaults = UserDefaults.standard
+            library = decodeOrEmpty([LauncherApplication].self, key: appLibraryKey, defaults: defaults)
+            configs = decodeOrEmpty([WidgetConfigurationList].self, key: widgetConfigurationsKey, defaults: defaults)
+        }
+
+        // 4. Si toujours vide: générer la configuration par défaut avec les applications préinstallées
+        if configs.isEmpty {
+            AppGroupLogger.log("WIDGET: Aucune configuration trouvée, utilisation de la pile par défaut")
+            configs = [WidgetConfigurationList.defaultStack]
+        }
+
+        // Hydrater chaque configuration pour garantir la validité et la présence d'applications
+        return configs.map { hydrate($0, library: library) }
     }
 
-    static func configuration(id: String?) -> WidgetConfigurationList? {
+    public static func configuration(id: String?) -> WidgetConfigurationList {
         let all = configurations()
-        guard let id, let uuid = UUID(uuidString: id) else { return all.first }
-        return all.first(where: { $0.id == uuid }) ?? all.first
+        if let id, let uuid = UUID(uuidString: id), let match = all.first(where: { $0.id == uuid }) {
+            return match
+        }
+        return all.first ?? WidgetConfigurationList.defaultStack
     }
 
-    static func iconURL(fileName: String?) -> URL? {
-        guard let fileName,
-              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return nil }
-        return container.appendingPathComponent("DownloadedIcons", isDirectory: true).appendingPathComponent(fileName)
+    public static func iconURL(fileName: String?) -> URL? {
+        guard let fileName else { return nil }
+        if let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) {
+            let path = container.appendingPathComponent("DownloadedIcons", isDirectory: true).appendingPathComponent(fileName)
+            if FileManager.default.fileExists(atPath: path.path) {
+                return path
+            }
+        }
+        if let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let path = docs.appendingPathComponent("DownloadedIcons", isDirectory: true).appendingPathComponent(fileName)
+            if FileManager.default.fileExists(atPath: path.path) {
+                return path
+            }
+        }
+        return nil
+    }
+
+    private static func loadSnapshotFromFile() -> SharedSnapshot? {
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier) else { return nil }
+        let fileURL = container.appendingPathComponent(snapshotFileName)
+        guard let data = try? Data(contentsOf: fileURL),
+              let snapshot = try? JSONDecoder().decode(SharedSnapshot.self, from: data) else { return nil }
+        return snapshot
     }
 
     private static func hydrate(_ configuration: WidgetConfigurationList, library: [LauncherApplication]) -> WidgetConfigurationList {
         var copy = configuration
         copy.itemLimit = min(maxAppsPerStack, max(1, copy.itemLimit))
-        copy.applicationIds = Array(copy.applicationIds.prefix(maxAppsPerStack))
-        copy.applications = copy.applicationIds.compactMap { id in library.first(where: { $0.id == id }) ?? copy.applications.first(where: { $0.id == id }) }
+        
+        // Synchroniser applicationIds si vide
+        if copy.applicationIds.isEmpty && !copy.applications.isEmpty {
+            copy.applicationIds = copy.applications.map(\.id)
+        }
+
+        // Résoudre les applications depuis la bibliothèque si nécessaire
+        if !library.isEmpty && !copy.applicationIds.isEmpty {
+            let resolved = copy.applicationIds.compactMap { id in
+                library.first(where: { $0.id == id }) ?? copy.applications.first(where: { $0.id == id })
+            }
+            if !resolved.isEmpty {
+                copy.applications = resolved
+            }
+        }
+
+        // Si la pile est toujours vide, charger les applications par défaut
+        if copy.applications.isEmpty {
+            copy.applications = PredefinedAppsDatabase.defaultFavorites
+            copy.applicationIds = copy.applications.map(\.id)
+        }
+
         return copy
     }
 
@@ -108,7 +297,7 @@ nonisolated enum SharedWidgetReader {
         do {
             return try JSONDecoder().decode(type, from: data)
         } catch {
-            logger.error("Decode failed for key '\(key)': \(error.localizedDescription)")
+            logger.error("Décodage échoué pour la clé '\(key)': \(error.localizedDescription)")
             return T()
         }
     }
