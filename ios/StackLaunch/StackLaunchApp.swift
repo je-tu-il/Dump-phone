@@ -17,38 +17,39 @@ struct StackLaunchApp: App {
         guard url.scheme == "stacklaunch" else { return }
 
         var rawTarget: String?
+        var bundleId: String?
+
         if let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
             rawTarget = components.queryItems?.first(where: { $0.name == "url" })?.value
+            bundleId = components.queryItems?.first(where: { $0.name == "bundle" })?.value
         }
         
-        // Fallback extraction si URLComponents ne parse pas la chaîne complexe
+        // Extraction de secours si URLComponents échoue sur un format complexe
         if rawTarget == nil {
             if let range = url.absoluteString.range(of: "url=") {
                 let suffix = String(url.absoluteString[range.upperBound...])
-                rawTarget = suffix.removingPercentEncoding ?? suffix
+                let part = suffix.components(separatedBy: "&").first ?? suffix
+                rawTarget = part.removingPercentEncoding ?? part
+            }
+        }
+        if bundleId == nil {
+            if let range = url.absoluteString.range(of: "bundle=") {
+                let suffix = String(url.absoluteString[range.upperBound...])
+                let part = suffix.components(separatedBy: "&").first ?? suffix
+                bundleId = part.removingPercentEncoding ?? part
             }
         }
 
-        guard let targetString = rawTarget?.trimmingCharacters(in: .whitespacesAndNewlines), !targetString.isEmpty else {
-            AppGroupLogger.log("APP onOpenURL ERR: Aucun paramètre 'url' valide dans \(url)")
-            return
-        }
-
-        var candidateString = targetString
-        if !candidateString.contains("://") && !candidateString.contains(":") {
-            candidateString = "\(candidateString)://"
-        }
-
-        guard let targetURL = URL(string: candidateString) else {
-            AppGroupLogger.log("APP onOpenURL ERR: URL cible invalide: '\(candidateString)'")
-            return
-        }
-
-        AppGroupLogger.log("APP onOpenURL: Ouverture immédiate de l'app cible -> \(targetURL.absoluteString)")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            UIApplication.shared.open(targetURL, options: [:]) { success in
-                AppGroupLogger.log("APP UIApplication.open -> \(success ? "Succès" : "Échec") pour \(targetURL)")
+        var candidateURL: URL? = nil
+        if let targetString = rawTarget?.trimmingCharacters(in: .whitespacesAndNewlines), !targetString.isEmpty {
+            var formatted = targetString
+            if !formatted.contains("://") && !formatted.contains(":") {
+                formatted = "\(formatted)://"
             }
+            candidateURL = URL(string: formatted)
         }
+
+        // Lancement natif: ouvre l'application à sa racine sans écran de composition ou appel
+        NativeAppLauncher.openApp(bundleIdentifier: bundleId, fallbackURL: candidateURL)
     }
 }

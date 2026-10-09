@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import ImageIO
+import ObjectiveC
 import SwiftUI
 import UIKit
 import WidgetKit
@@ -120,6 +121,7 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
     public var iconRemoteURL: String?
     public var iconFileName: String?
     public var textColorHex: String
+    public var bundleIdentifier: String?
 
     public init(
         id: UUID = UUID(),
@@ -129,7 +131,8 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
         appStoreId: String? = nil,
         iconRemoteURL: String? = nil,
         iconFileName: String? = nil,
-        textColorHex: String = "#FFFFFF"
+        textColorHex: String = "#FFFFFF",
+        bundleIdentifier: String? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -139,11 +142,29 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
         self.iconRemoteURL = iconRemoteURL
         self.iconFileName = iconFileName
         self.textColorHex = textColorHex
+        self.bundleIdentifier = bundleIdentifier
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.displayName = try container.decode(String.self, forKey: .displayName)
+        self.urlScheme = try container.decode(String.self, forKey: .urlScheme)
+        self.symbolName = try container.decode(String.self, forKey: .symbolName)
+        self.appStoreId = try container.decodeIfPresent(String.self, forKey: .appStoreId)
+        self.iconRemoteURL = try container.decodeIfPresent(String.self, forKey: .iconRemoteURL)
+        self.iconFileName = try container.decodeIfPresent(String.self, forKey: .iconFileName)
+        self.textColorHex = try container.decode(String.self, forKey: .textColorHex)
+        self.bundleIdentifier = try container.decodeIfPresent(String.self, forKey: .bundleIdentifier)
     }
 
     public var parsedURL: URL? {
-        let trimmed = urlScheme.trimmingCharacters(in: .whitespacesAndNewlines)
+        var trimmed = urlScheme.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
+        // Remplacer mailto par message:// pour ouvrir Mail directement sans feuille de rédaction
+        if trimmed.lowercased().starts(with: "mailto") {
+            trimmed = "message://"
+        }
         if let direct = URL(string: trimmed) {
             return direct
         }
@@ -153,14 +174,140 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
         return nil
     }
 
-    /// URL universelle pour le WidgetKit: route vers l'app hôte StackLaunch qui ouvre ensuite l'application cible
+    public var effectiveBundleIdentifier: String? {
+        if let bundle = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines), !bundle.isEmpty {
+            return bundle
+        }
+        // Recherche dans PredefinedAppsDatabase
+        if let predefined = PredefinedAppsDatabase.all.first(where: {
+            ($0.appStoreId == self.appStoreId && self.appStoreId != nil && !self.appStoreId!.isEmpty) ||
+            $0.name.caseInsensitiveCompare(self.displayName) == .orderedSame ||
+            $0.urlScheme.lowercased() == self.urlScheme.lowercased()
+        }), let bundle = predefined.bundleIdentifier, !bundle.isEmpty {
+            return bundle
+        }
+        return Self.inferBundleIdentifier(fromScheme: urlScheme)
+    }
+
+    public static func inferBundleIdentifier(fromScheme scheme: String) -> String? {
+        let clean = scheme.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.starts(with: "tel") { return "com.apple.mobilephone" }
+        if clean.starts(with: "sms") { return "com.apple.MobileSMS" }
+        if clean.starts(with: "message") || clean.starts(with: "mailto") { return "com.apple.mobilemail" }
+        if clean.starts(with: "photos") { return "com.apple.mobileslideshow" }
+        if clean.starts(with: "safari") || clean.starts(with: "x-web-search") { return "com.apple.mobilesafari" }
+        if clean.starts(with: "music") { return "com.apple.Music" }
+        if clean.starts(with: "podcasts") { return "com.apple.podcasts" }
+        if clean.starts(with: "shoebox") { return "com.apple.Passbook" }
+        if clean.starts(with: "calshow") { return "com.apple.mobilecal" }
+        if clean.starts(with: "reminders") || clean.starts(with: "x-apple-reminderkit") { return "com.apple.reminders" }
+        if clean.starts(with: "mobilenotes") || clean.starts(with: "applenotes") { return "com.apple.mobilenotes" }
+        if clean.starts(with: "applehealth") || clean.starts(with: "x-apple-health") { return "com.apple.Health" }
+        if clean.starts(with: "camera") { return "com.apple.camera" }
+        if clean.starts(with: "app-prefs") || clean.starts(with: "prefs") { return "com.apple.Preferences" }
+        if clean.starts(with: "clock") { return "com.apple.mobiletimer" }
+        if clean.starts(with: "calc") { return "com.apple.calculator" }
+        if clean.starts(with: "shortcuts") { return "com.apple.shortcuts" }
+        if clean.starts(with: "weather") { return "com.apple.weather" }
+        if clean.starts(with: "shareddocuments") { return "com.apple.DocumentsApp" }
+        if clean.starts(with: "itms-apps") { return "com.apple.AppStore" }
+        if clean.starts(with: "spotify") { return "com.spotify.client" }
+        if clean.starts(with: "whatsapp") { return "net.whatsapp.WhatsApp" }
+        if clean.starts(with: "instagram") { return "com.burbn.instagram" }
+        if clean.starts(with: "snssdk") || clean.starts(with: "tiktok") { return "com.zhiliaoapp.musically" }
+        if clean.starts(with: "twitter") { return "com.atebits.Tweetie2" }
+        if clean.starts(with: "tg") { return "ph.telegra.Telegraph" }
+        if clean.starts(with: "discord") { return "com.hammerandchisel.discord" }
+        if clean.starts(with: "snapchat") { return "com.toyopagroup.picaboo" }
+        if clean.starts(with: "fb-messenger") { return "com.facebook.Messenger" }
+        if clean.starts(with: "youtube") { return "com.google.ios.youtube" }
+        if clean.starts(with: "googlechrome") { return "com.google.chrome.ios" }
+        if clean.starts(with: "comgooglemaps") { return "com.google.Maps" }
+        if clean.starts(with: "googlegmail") { return "com.google.Gmail" }
+        return nil
+    }
+
+    /// URL universelle pour le WidgetKit: route vers l'app hôte StackLaunch avec URL scheme et Bundle ID
     public var widgetLaunchURL: URL? {
-        guard let directURL = parsedURL else { return nil }
-        let targetString = directURL.absoluteString
+        var queryParts: [String] = []
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-_.~")
-        guard let encoded = targetString.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
-        return URL(string: "stacklaunch://launch?url=\(encoded)")
+
+        if let directURL = parsedURL,
+           let encodedURL = directURL.absoluteString.addingPercentEncoding(withAllowedCharacters: allowed) {
+            queryParts.append("url=\(encodedURL)")
+        }
+        if let bundle = effectiveBundleIdentifier,
+           let encodedBundle = bundle.addingPercentEncoding(withAllowedCharacters: allowed) {
+            queryParts.append("bundle=\(encodedBundle)")
+        }
+        guard !queryParts.isEmpty else { return nil }
+        return URL(string: "stacklaunch://launch?\(queryParts.joined(separator: "&"))")
+    }
+}
+
+// MARK: - Lanceur d'applications natif (Supporte l'ouverture directe sans invite d'action)
+public enum NativeAppLauncher {
+    public static func openApp(bundleIdentifier: String?, fallbackURL: URL?) {
+        AppGroupLogger.log("LAUNCHER: Ouverture demandée -> BundleID: '\(bundleIdentifier ?? "nil")' | URL: '\(fallbackURL?.absoluteString ?? "nil")'")
+
+        // Résolution du Bundle ID si manquant
+        var resolvedBundleID = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if resolvedBundleID == nil || resolvedBundleID!.isEmpty {
+            if let scheme = fallbackURL?.scheme {
+                resolvedBundleID = LauncherApplication.inferBundleIdentifier(fromScheme: scheme)
+            }
+        }
+
+        // 1. Essai avec LSApplicationWorkspace (ouvre directement l'application à la racine sans dialogue d'action ni compose)
+        if let bundleID = resolvedBundleID, !bundleID.isEmpty {
+            if openViaWorkspace(bundleID: bundleID) {
+                AppGroupLogger.log("LAUNCHER: Succès via LSApplicationWorkspace pour \(bundleID)")
+                return
+            } else {
+                AppGroupLogger.log("LAUNCHER: Échec ou indisponibilité via LSApplicationWorkspace pour \(bundleID)")
+            }
+        }
+
+        // 2. Fallback: UIApplication.shared.open avec l'URL Scheme
+        var finalURL = fallbackURL
+        if let scheme = finalURL?.scheme?.lowercased(), scheme == "mailto" {
+            finalURL = URL(string: "message://")
+        }
+
+        if let url = finalURL {
+            AppGroupLogger.log("LAUNCHER: Ouverture via UIApplication.open pour \(url.absoluteString)")
+            DispatchQueue.main.async {
+                UIApplication.shared.open(url, options: [:]) { success in
+                    AppGroupLogger.log("LAUNCHER: Résultat UIApplication.open -> \(success ? "Succès" : "Échec")")
+                }
+            }
+        }
+    }
+
+    private static func openViaWorkspace(bundleID: String) -> Bool {
+        guard let workspaceClass = NSClassFromString("LSApplicationWorkspace") as? NSObject.Type else {
+            return false
+        }
+        let defaultWorkspaceSel = NSSelectorFromString("defaultWorkspace")
+        guard workspaceClass.responds(to: defaultWorkspaceSel),
+              let workspace = workspaceClass.perform(defaultWorkspaceSel)?.takeUnretainedValue() as? NSObject else {
+            return false
+        }
+        let openAppSel = NSSelectorFromString("openApplicationWithBundleID:")
+        guard let method = class_getInstanceMethod(type(of: workspace), openAppSel) else {
+            if workspace.responds(to: openAppSel) {
+                _ = workspace.perform(openAppSel, with: bundleID)
+                return true
+            }
+            return false
+        }
+        
+        let imp = method_getImplementation(method)
+        typealias OpenAppFn = @convention(c) (AnyObject, Selector, NSString) -> Bool
+        let openApp = unsafeBitCast(imp, to: OpenAppFn.self)
+        let success = openApp(workspace, openAppSel, bundleID as NSString)
+        return success
     }
 }
 
