@@ -11,13 +11,13 @@ public let defaultAppGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.sta
 public let widgetConfigurationsKey = "widgetConfigurations"
 public let appLibraryKey = "globalAppLibrary"
 public let snapshotFileName = "stacklaunch_data.json"
-public let maxAppsPerStack = 16
+public let maxAppsPerStack = 20
 
 // MARK: - Formats de Widget et Limites d'Applications
 public enum WidgetFormatSize: String, Codable, CaseIterable, Identifiable, Sendable {
     case small = "small"       // Petit: 4 max
     case medium = "medium"     // Rectangle: 8 max
-    case large = "large"       // Méga: 16 max
+    case large = "large"       // Méga: 20 max
 
     public var id: String { rawValue }
 
@@ -25,7 +25,7 @@ public enum WidgetFormatSize: String, Codable, CaseIterable, Identifiable, Senda
         switch self {
         case .small: return "Petit (4 max)"
         case .medium: return "Rectangle (8 max)"
-        case .large: return "Méga (16 max)"
+        case .large: return "Méga (20 max)"
         }
     }
 
@@ -41,7 +41,7 @@ public enum WidgetFormatSize: String, Codable, CaseIterable, Identifiable, Senda
         switch self {
         case .small: return 4
         case .medium: return 8
-        case .large: return 16
+        case .large: return 20
         }
     }
 }

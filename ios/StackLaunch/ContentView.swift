@@ -403,7 +403,7 @@ private struct LiveWidgetPreviewCard: View {
             Picker("Taille d'aperçu", selection: $previewSize) {
                 Text("Petit (4)").tag(0)
                 Text("Rectangle (8)").tag(1)
-                Text("Méga (16)").tag(2)
+                Text("Méga (20)").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
@@ -437,41 +437,43 @@ private struct LiveWidgetPreviewCard: View {
                                 .frame(maxWidth: .infinity)
                             Spacer()
                         } else if visible.count <= 2 {
-                            VStack(spacing: 5) {
+                            // 1 colonne pour 1 ou 2 apps : texte agrandi
+                            VStack(spacing: visible.count == 1 ? 8 : 5) {
                                 ForEach(visible) { app in
                                     HStack(spacing: 6) {
                                         if configuration.showIcon {
                                             Image(systemName: app.symbolName.isEmpty ? "app.fill" : app.symbolName)
-                                                .font(.system(size: 11))
+                                                .font(.system(size: visible.count == 1 ? 14 : 12))
                                                 .foregroundStyle(.cyan)
                                         }
                                         Text(app.displayName)
-                                            .font(.system(size: 10, weight: .semibold))
+                                            .font(.system(size: visible.count == 1 ? 13 : 11.5, weight: .bold))
                                             .foregroundStyle(Color(hex: app.textColorHex))
                                             .lineLimit(1)
                                         Spacer(minLength: 0)
                                     }
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 5)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, visible.count == 1 ? 8 : 6)
                                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.12)))
                                 }
                             }
                         } else {
+                            // 2 colonnes pour 3 ou 4 apps
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
                                 ForEach(visible) { app in
                                     VStack(spacing: 2) {
                                         if configuration.showIcon {
                                             Image(systemName: app.symbolName.isEmpty ? "app.fill" : app.symbolName)
-                                                .font(.system(size: 12))
+                                                .font(.system(size: 13))
                                                 .foregroundStyle(.cyan)
                                         }
                                         Text(app.displayName)
-                                            .font(.system(size: 8, weight: .semibold))
+                                            .font(.system(size: 9.5, weight: .bold))
                                             .foregroundStyle(Color(hex: app.textColorHex))
                                             .lineLimit(1)
                                     }
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 4)
+                                    .padding(.vertical, 5)
                                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.12)))
                                 }
                             }
@@ -511,9 +513,31 @@ private struct LiveWidgetPreviewCard: View {
                                 .foregroundStyle(.gray)
                                 .frame(maxWidth: .infinity)
                             Spacer()
+                        } else if apps.count <= 4 {
+                            // 1 colonne adaptée au nombre d'apps avec texte agrandi
+                            VStack(spacing: apps.count <= 2 ? 8 : 5) {
+                                ForEach(apps) { app in
+                                    HStack(spacing: 8) {
+                                        if configuration.showIcon {
+                                            Image(systemName: app.symbolName.isEmpty ? "app.fill" : app.symbolName)
+                                                .font(.system(size: apps.count <= 2 ? 15 : 13))
+                                                .foregroundStyle(.cyan)
+                                        }
+                                        Text(app.displayName)
+                                            .font(.system(size: apps.count <= 2 ? 15 : 13, weight: .bold))
+                                            .foregroundStyle(Color(hex: app.textColorHex))
+                                            .lineLimit(1)
+                                        Spacer(minLength: 0)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, apps.count <= 2 ? 8 : 6)
+                                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
+                                }
+                            }
                         } else {
-                            let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
-                            LazyVGrid(columns: columns, spacing: 6) {
+                            // 2 colonnes (5 à 8 apps)
+                            let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
+                            LazyVGrid(columns: columns, spacing: 5) {
                                 ForEach(apps) { app in
                                     HStack(spacing: 6) {
                                         if configuration.showIcon {
@@ -522,14 +546,14 @@ private struct LiveWidgetPreviewCard: View {
                                                 .foregroundStyle(.cyan)
                                         }
                                         Text(app.displayName)
-                                            .font(.system(size: 10, weight: .semibold))
+                                            .font(.system(size: 11, weight: .semibold))
                                             .foregroundStyle(Color(hex: app.textColorHex))
                                             .lineLimit(1)
                                         Spacer(minLength: 0)
                                     }
                                     .padding(.horizontal, 8)
-                                    .padding(.vertical, 6)
-                                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
+                                    .padding(.vertical, 5)
+                                    .background(RoundedRectangle(cornerRadius: 9).fill(Color.white.opacity(0.12)))
                                 }
                             }
                         }
@@ -541,12 +565,13 @@ private struct LiveWidgetPreviewCard: View {
                 .padding(.horizontal)
                 .padding(.vertical, 4)
             } else {
-                // Aperçu Large (Méga - 16 max)
+                // Aperçu Large (Méga - 20 max)
+                let apps = Array(configuration.visibleApplications.prefix(20))
                 ZStack {
                     RoundedRectangle(cornerRadius: 22)
                         .fill(Color(hex: configuration.backgroundColorHex))
                         .frame(maxWidth: .infinity)
-                        .frame(height: 260)
+                        .frame(height: apps.count > 12 ? 300 : 260)
                         .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -561,7 +586,6 @@ private struct LiveWidgetPreviewCard: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        let apps = Array(configuration.visibleApplications.prefix(16))
                         if apps.isEmpty {
                             Spacer()
                             Text("Aucune application configurée")
@@ -569,24 +593,46 @@ private struct LiveWidgetPreviewCard: View {
                                 .foregroundStyle(.gray)
                                 .frame(maxWidth: .infinity)
                             Spacer()
-                        } else {
-                            let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
-                            LazyVGrid(columns: columns, spacing: 4) {
+                        } else if apps.count <= 6 {
+                            // 1 colonne adaptée au nombre d'apps avec texte agrandi
+                            VStack(spacing: apps.count <= 3 ? 9 : 5) {
                                 ForEach(apps) { app in
-                                    HStack(spacing: 6) {
+                                    HStack(spacing: 8) {
                                         if configuration.showIcon {
                                             Image(systemName: app.symbolName.isEmpty ? "app.fill" : app.symbolName)
-                                                .font(.system(size: 10))
+                                                .font(.system(size: apps.count <= 3 ? 16 : 14))
                                                 .foregroundStyle(.cyan)
                                         }
                                         Text(app.displayName)
-                                            .font(.system(size: 9, weight: .semibold))
+                                            .font(.system(size: apps.count <= 3 ? 16 : 13.5, weight: .bold))
+                                            .foregroundStyle(Color(hex: app.textColorHex))
+                                            .lineLimit(1)
+                                        Spacer(minLength: 0)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, apps.count <= 3 ? 8 : 6)
+                                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
+                                }
+                            }
+                        } else {
+                            // 2 colonnes (7 à 20 apps)
+                            let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
+                            LazyVGrid(columns: columns, spacing: apps.count > 12 ? 3 : 5) {
+                                ForEach(apps) { app in
+                                    HStack(spacing: apps.count > 12 ? 4 : 6) {
+                                        if configuration.showIcon {
+                                            Image(systemName: app.symbolName.isEmpty ? "app.fill" : app.symbolName)
+                                                .font(.system(size: apps.count > 12 ? 9 : 11))
+                                                .foregroundStyle(.cyan)
+                                        }
+                                        Text(app.displayName)
+                                            .font(.system(size: apps.count > 12 ? 9 : 11, weight: .semibold))
                                             .foregroundStyle(Color(hex: app.textColorHex))
                                             .lineLimit(1)
                                         Spacer(minLength: 0)
                                     }
                                     .padding(.horizontal, 6)
-                                    .padding(.vertical, 4)
+                                    .padding(.vertical, apps.count > 12 ? 3 : 5)
                                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.12)))
                                 }
                             }
@@ -594,7 +640,7 @@ private struct LiveWidgetPreviewCard: View {
                         Spacer(minLength: 0)
                     }
                     .padding(12)
-                    .frame(height: 260)
+                    .frame(height: apps.count > 12 ? 300 : 260)
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 4)

@@ -169,7 +169,8 @@ private struct SmallWidgetView: View {
                 }
                 .frame(maxWidth: .infinity)
             } else if apps.count <= 2 {
-                VStack(spacing: 6) {
+                // 1 colonne pour 1 ou 2 apps : texte agrandi
+                VStack(spacing: apps.count == 1 ? 8 : 6) {
                     ForEach(apps) { app in
                         Button(intent: LaunchAppIntent(
                             targetURLString: app.parsedURL?.absoluteString,
@@ -179,22 +180,23 @@ private struct SmallWidgetView: View {
                             HStack(spacing: 8) {
                                 if configuration.showIcon {
                                     WidgetIconView(app: app, style: configuration.iconStyle)
-                                        .frame(width: 22, height: 22)
+                                        .frame(width: apps.count == 1 ? 26 : 22, height: apps.count == 1 ? 26 : 22)
                                 }
                                 Text(app.displayName)
-                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                    .font(.system(size: apps.count == 1 ? 14 : 12, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color(hex: app.textColorHex))
                                     .lineLimit(1)
                                 Spacer(minLength: 0)
                             }
                             .padding(.horizontal, 8)
-                            .padding(.vertical, 7)
+                            .padding(.vertical, apps.count == 1 ? 10 : 7)
                             .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
                         }
                         .buttonStyle(.plain)
                     }
                 }
             } else {
+                // 3 ou 4 apps : grille 2 colonnes avec texte net et bien visible
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
                     ForEach(apps) { app in
                         Button(intent: LaunchAppIntent(
@@ -205,10 +207,10 @@ private struct SmallWidgetView: View {
                             VStack(spacing: 4) {
                                 if configuration.showIcon {
                                     WidgetIconView(app: app, style: configuration.iconStyle)
-                                        .frame(width: 26, height: 26)
+                                        .frame(width: 24, height: 24)
                                 }
                                 Text(app.displayName)
-                                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                    .font(.system(size: 10, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color(hex: app.textColorHex))
                                     .lineLimit(1)
                             }
@@ -226,6 +228,66 @@ private struct SmallWidgetView: View {
     }
 }
 
+// MARK: - Mode de disposition et taille des lignes
+private enum AppRowLayoutMode {
+    case singleColumnLarge   // 1 colonne, très grand (ex: 1-2 apps Medium, 1-3 apps Large)
+    case singleColumnMedium  // 1 colonne, grand (ex: 3-4 apps Medium, 4-6 apps Large)
+    case twoColumnsStandard  // 2 colonnes, standard (ex: 5-8 apps Medium, 7-12 apps Large)
+    case twoColumnsDense     // 2 colonnes, dense (ex: 13-20 apps Large)
+
+    var fontSize: CGFloat {
+        switch self {
+        case .singleColumnLarge: return 16
+        case .singleColumnMedium: return 13.5
+        case .twoColumnsStandard: return 11.5
+        case .twoColumnsDense: return 10
+        }
+    }
+
+    var fontWeight: Font.Weight {
+        switch self {
+        case .singleColumnLarge: return .bold
+        case .singleColumnMedium, .twoColumnsStandard, .twoColumnsDense: return .semibold
+        }
+    }
+
+    var iconDimension: CGFloat {
+        switch self {
+        case .singleColumnLarge: return 28
+        case .singleColumnMedium: return 24
+        case .twoColumnsStandard: return 20
+        case .twoColumnsDense: return 16
+        }
+    }
+
+    var horizontalPadding: CGFloat {
+        switch self {
+        case .singleColumnLarge: return 12
+        case .singleColumnMedium: return 10
+        case .twoColumnsStandard: return 8
+        case .twoColumnsDense: return 6
+        }
+    }
+
+    var verticalPadding: CGFloat {
+        switch self {
+        case .singleColumnLarge: return 9
+        case .singleColumnMedium: return 7
+        case .twoColumnsStandard: return 6
+        case .twoColumnsDense: return 3.5
+        }
+    }
+
+    var cornerRadius: CGFloat {
+        switch self {
+        case .singleColumnLarge: return 12
+        case .singleColumnMedium: return 10
+        case .twoColumnsStandard: return 9
+        case .twoColumnsDense: return 8
+        }
+    }
+}
+
 // MARK: - Vue Widget Moyen (.systemMedium)
 private struct MediumWidgetView: View {
     let configuration: WidgetConfigurationList
@@ -234,12 +296,22 @@ private struct MediumWidgetView: View {
         Array(configuration.visibleApplications.prefix(8))
     }
 
-    private var isDense: Bool {
-        apps.count > 4
+    private var isSingleColumn: Bool {
+        apps.count <= 4
+    }
+
+    private var rowMode: AppRowLayoutMode {
+        if apps.count <= 2 {
+            return .singleColumnLarge
+        } else if apps.count <= 4 {
+            return .singleColumnMedium
+        } else {
+            return .twoColumnsStandard
+        }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: isDense ? 4 : 6) {
+        VStack(alignment: .leading, spacing: isSingleColumn ? 6 : 4) {
             // Entête
             HStack {
                 Text(configuration.name)
@@ -262,23 +334,37 @@ private struct MediumWidgetView: View {
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
-            } else {
-                let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
-                LazyVGrid(columns: columns, spacing: isDense ? 4 : 6) {
+            } else if isSingleColumn {
+                // 1 colonne adaptée au nombre d'apps avec texte agrandi
+                VStack(spacing: apps.count <= 2 ? 8 : 5) {
                     ForEach(apps) { app in
                         if let url = app.widgetLaunchURL {
                             Link(destination: url) {
-                                LauncherAppRow(app: app, configuration: configuration, isDense: isDense)
+                                LauncherAppRow(app: app, configuration: configuration, mode: rowMode)
                             }
                         } else {
-                            LauncherAppRow(app: app, configuration: configuration, isDense: isDense)
+                            LauncherAppRow(app: app, configuration: configuration, mode: rowMode)
+                        }
+                    }
+                }
+            } else {
+                // 2 colonnes quand 5 à 8 applications
+                let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
+                LazyVGrid(columns: columns, spacing: 5) {
+                    ForEach(apps) { app in
+                        if let url = app.widgetLaunchURL {
+                            Link(destination: url) {
+                                LauncherAppRow(app: app, configuration: configuration, mode: rowMode)
+                            }
+                        } else {
+                            LauncherAppRow(app: app, configuration: configuration, mode: rowMode)
                         }
                     }
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(isDense ? 8 : 10)
+        .padding(isSingleColumn ? 10 : 8)
     }
 }
 
@@ -287,19 +373,31 @@ private struct LargeWidgetView: View {
     let configuration: WidgetConfigurationList
 
     private var apps: [LauncherApplication] {
-        Array(configuration.visibleApplications.prefix(16))
+        Array(configuration.visibleApplications.prefix(20))
     }
 
-    private var isDense: Bool {
-        apps.count > 8
+    private var isSingleColumn: Bool {
+        apps.count <= 6
+    }
+
+    private var rowMode: AppRowLayoutMode {
+        if apps.count <= 3 {
+            return .singleColumnLarge
+        } else if apps.count <= 6 {
+            return .singleColumnMedium
+        } else if apps.count <= 12 {
+            return .twoColumnsStandard
+        } else {
+            return .twoColumnsDense
+        }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: isDense ? 4 : 8) {
+        VStack(alignment: .leading, spacing: isSingleColumn ? 6 : (apps.count > 12 ? 3 : 5)) {
             // Entête
             HStack {
                 Text(configuration.name)
-                    .font(isDense ? .subheadline.weight(.bold) : .headline.weight(.bold))
+                    .font(isSingleColumn ? .headline.weight(.bold) : .subheadline.weight(.bold))
                     .foregroundStyle(.cyan)
                     .lineLimit(1)
                 Spacer()
@@ -318,23 +416,37 @@ private struct LargeWidgetView: View {
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
-            } else {
-                let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
-                LazyVGrid(columns: columns, spacing: isDense ? 4 : 8) {
+            } else if isSingleColumn {
+                // 1 colonne adaptée au nombre d'apps (jusqu'à 6 apps) avec texte agrandi
+                VStack(spacing: apps.count <= 3 ? 10 : 6) {
                     ForEach(apps) { app in
                         if let url = app.widgetLaunchURL {
                             Link(destination: url) {
-                                LauncherAppRow(app: app, configuration: configuration, isLarge: true, isDense: isDense)
+                                LauncherAppRow(app: app, configuration: configuration, mode: rowMode)
                             }
                         } else {
-                            LauncherAppRow(app: app, configuration: configuration, isLarge: true, isDense: isDense)
+                            LauncherAppRow(app: app, configuration: configuration, mode: rowMode)
+                        }
+                    }
+                }
+            } else {
+                // 2 colonnes (de 7 à 20 apps)
+                let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
+                LazyVGrid(columns: columns, spacing: apps.count > 12 ? 3 : 5) {
+                    ForEach(apps) { app in
+                        if let url = app.widgetLaunchURL {
+                            Link(destination: url) {
+                                LauncherAppRow(app: app, configuration: configuration, mode: rowMode)
+                            }
+                        } else {
+                            LauncherAppRow(app: app, configuration: configuration, mode: rowMode)
                         }
                     }
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(isDense ? 8 : 12)
+        .padding(apps.count > 12 ? 8 : 10)
     }
 }
 
@@ -342,25 +454,24 @@ private struct LargeWidgetView: View {
 private struct LauncherAppRow: View {
     let app: LauncherApplication
     let configuration: WidgetConfigurationList
-    var isLarge: Bool = false
-    var isDense: Bool = false
+    var mode: AppRowLayoutMode = .twoColumnsStandard
 
     var body: some View {
-        HStack(spacing: isDense ? 6 : 8) {
+        HStack(spacing: mode == .twoColumnsDense ? 6 : 8) {
             if configuration.showIcon {
                 WidgetIconView(app: app, style: configuration.iconStyle)
-                    .frame(width: isDense ? 16 : (isLarge ? 24 : 20), height: isDense ? 16 : (isLarge ? 24 : 20))
+                    .frame(width: mode.iconDimension, height: mode.iconDimension)
             }
             Text(app.displayName)
-                .font(.system(size: isDense ? 10 : (isLarge ? 12 : 11), weight: .semibold, design: .rounded))
+                .font(.system(size: mode.fontSize, weight: mode.fontWeight, design: .rounded))
                 .foregroundStyle(Color(hex: app.textColorHex))
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, isDense ? 6 : 8)
-        .padding(.vertical, isDense ? 4 : (isLarge ? 8 : 6))
+        .padding(.horizontal, mode.horizontalPadding)
+        .padding(.vertical, mode.verticalPadding)
         .background(
-            RoundedRectangle(cornerRadius: isDense ? 8 : 10)
+            RoundedRectangle(cornerRadius: mode.cornerRadius)
                 .fill(Color.white.opacity(0.12))
         )
     }
