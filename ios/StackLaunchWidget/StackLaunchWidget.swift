@@ -52,6 +52,41 @@ struct SelectLauncherStackIntent: WidgetConfigurationIntent {
     var stack: LauncherStackEntity?
 }
 
+// MARK: - Intention d'ouverture d'application depuis le widget
+struct LaunchAppIntent: AppIntent {
+    static var title: LocalizedStringResource = "Ouvrir l'application"
+    static var description: IntentDescription = "Ouvre l'application sélectionnée depuis le widget."
+    static var openAppWhenRun: Bool = true
+
+    @Parameter(title: "URL Cible")
+    var targetURLString: String?
+
+    @Parameter(title: "Bundle ID")
+    var bundleID: String?
+
+    @Parameter(title: "Nom de l'application")
+    var appName: String?
+
+    init() {}
+
+    init(targetURLString: String?, bundleID: String?, appName: String?) {
+        self.targetURLString = targetURLString
+        self.bundleID = bundleID
+        self.appName = appName
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        AppGroupLogger.log("INTENT: LaunchAppIntent déclenché depuis widget pour '\(appName ?? "inconnu")'")
+        if let defaults = AppGroupHelper.sharedDefaults {
+            defaults.set(targetURLString, forKey: "pendingLaunchURL")
+            defaults.set(bundleID, forKey: "pendingLaunchBundleID")
+            defaults.synchronize()
+        }
+        return .result()
+    }
+}
+
 // MARK: - Entrée de chronologie
 struct LauncherEntry: TimelineEntry {
     let date: Date
@@ -110,10 +145,6 @@ private struct SmallWidgetView: View {
         Array(configuration.visibleApplications.prefix(4))
     }
 
-    private var primaryLaunchURL: URL? {
-        apps.first?.widgetLaunchURL ?? URL(string: "stacklaunch://")
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             // Entête
@@ -140,45 +171,58 @@ private struct SmallWidgetView: View {
             } else if apps.count <= 2 {
                 VStack(spacing: 6) {
                     ForEach(apps) { app in
-                        HStack(spacing: 8) {
-                            if configuration.showIcon {
-                                WidgetIconView(app: app, style: configuration.iconStyle)
-                                    .frame(width: 22, height: 22)
+                        Button(intent: LaunchAppIntent(
+                            targetURLString: app.parsedURL?.absoluteString,
+                            bundleID: app.effectiveBundleIdentifier,
+                            appName: app.displayName
+                        )) {
+                            HStack(spacing: 8) {
+                                if configuration.showIcon {
+                                    WidgetIconView(app: app, style: configuration.iconStyle)
+                                        .frame(width: 22, height: 22)
+                                }
+                                Text(app.displayName)
+                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(Color(hex: app.textColorHex))
+                                    .lineLimit(1)
+                                Spacer(minLength: 0)
                             }
-                            Text(app.displayName)
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(Color(hex: app.textColorHex))
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 7)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 7)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
+                        .buttonStyle(.plain)
                     }
                 }
             } else {
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
                     ForEach(apps) { app in
-                        VStack(spacing: 4) {
-                            if configuration.showIcon {
-                                WidgetIconView(app: app, style: configuration.iconStyle)
-                                    .frame(width: 26, height: 26)
+                        Button(intent: LaunchAppIntent(
+                            targetURLString: app.parsedURL?.absoluteString,
+                            bundleID: app.effectiveBundleIdentifier,
+                            appName: app.displayName
+                        )) {
+                            VStack(spacing: 4) {
+                                if configuration.showIcon {
+                                    WidgetIconView(app: app, style: configuration.iconStyle)
+                                        .frame(width: 26, height: 26)
+                                }
+                                Text(app.displayName)
+                                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(Color(hex: app.textColorHex))
+                                    .lineLimit(1)
                             }
-                            Text(app.displayName)
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
-                                .foregroundStyle(Color(hex: app.textColorHex))
-                                .lineLimit(1)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
+                        .buttonStyle(.plain)
                     }
                 }
             }
             Spacer(minLength: 0)
         }
         .padding(8)
-        .widgetURL(primaryLaunchURL)
     }
 }
 
@@ -187,11 +231,15 @@ private struct MediumWidgetView: View {
     let configuration: WidgetConfigurationList
 
     private var apps: [LauncherApplication] {
-        configuration.visibleApplications
+        Array(configuration.visibleApplications.prefix(8))
+    }
+
+    private var isDense: Bool {
+        apps.count > 4
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: isDense ? 4 : 6) {
             // Entête
             HStack {
                 Text(configuration.name)
@@ -215,22 +263,22 @@ private struct MediumWidgetView: View {
                 }
                 .frame(maxWidth: .infinity)
             } else {
-                let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
-                LazyVGrid(columns: columns, spacing: 6) {
+                let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
+                LazyVGrid(columns: columns, spacing: isDense ? 4 : 6) {
                     ForEach(apps) { app in
                         if let url = app.widgetLaunchURL {
                             Link(destination: url) {
-                                LauncherAppRow(app: app, configuration: configuration)
+                                LauncherAppRow(app: app, configuration: configuration, isDense: isDense)
                             }
                         } else {
-                            LauncherAppRow(app: app, configuration: configuration)
+                            LauncherAppRow(app: app, configuration: configuration, isDense: isDense)
                         }
                     }
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(10)
+        .padding(isDense ? 8 : 10)
     }
 }
 
@@ -239,20 +287,24 @@ private struct LargeWidgetView: View {
     let configuration: WidgetConfigurationList
 
     private var apps: [LauncherApplication] {
-        configuration.visibleApplications
+        Array(configuration.visibleApplications.prefix(16))
+    }
+
+    private var isDense: Bool {
+        apps.count > 8
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: isDense ? 4 : 8) {
             // Entête
             HStack {
                 Text(configuration.name)
-                    .font(.headline.weight(.bold))
+                    .font(isDense ? .subheadline.weight(.bold) : .headline.weight(.bold))
                     .foregroundStyle(.cyan)
                     .lineLimit(1)
                 Spacer()
                 Text("\(apps.count) app\(apps.count > 1 ? "s" : "")")
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 4)
@@ -267,22 +319,22 @@ private struct LargeWidgetView: View {
                 }
                 .frame(maxWidth: .infinity)
             } else {
-                let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
-                LazyVGrid(columns: columns, spacing: 8) {
+                let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
+                LazyVGrid(columns: columns, spacing: isDense ? 4 : 8) {
                     ForEach(apps) { app in
                         if let url = app.widgetLaunchURL {
                             Link(destination: url) {
-                                LauncherAppRow(app: app, configuration: configuration, isLarge: true)
+                                LauncherAppRow(app: app, configuration: configuration, isLarge: true, isDense: isDense)
                             }
                         } else {
-                            LauncherAppRow(app: app, configuration: configuration, isLarge: true)
+                            LauncherAppRow(app: app, configuration: configuration, isLarge: true, isDense: isDense)
                         }
                     }
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(isDense ? 8 : 12)
     }
 }
 
@@ -291,23 +343,24 @@ private struct LauncherAppRow: View {
     let app: LauncherApplication
     let configuration: WidgetConfigurationList
     var isLarge: Bool = false
+    var isDense: Bool = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: isDense ? 6 : 8) {
             if configuration.showIcon {
                 WidgetIconView(app: app, style: configuration.iconStyle)
-                    .frame(width: isLarge ? 24 : 20, height: isLarge ? 24 : 20)
+                    .frame(width: isDense ? 16 : (isLarge ? 24 : 20), height: isDense ? 16 : (isLarge ? 24 : 20))
             }
             Text(app.displayName)
-                .font(.system(size: isLarge ? 12 : 11, weight: .semibold, design: .rounded))
+                .font(.system(size: isDense ? 10 : (isLarge ? 12 : 11), weight: .semibold, design: .rounded))
                 .foregroundStyle(Color(hex: app.textColorHex))
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, isLarge ? 9 : 7)
+        .padding(.horizontal, isDense ? 6 : 8)
+        .padding(.vertical, isDense ? 4 : (isLarge ? 8 : 6))
         .background(
-            RoundedRectangle(cornerRadius: 11)
+            RoundedRectangle(cornerRadius: isDense ? 8 : 10)
                 .fill(Color.white.opacity(0.12))
         )
     }

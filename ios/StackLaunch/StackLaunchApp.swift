@@ -3,12 +3,40 @@ import UIKit
 
 @main
 struct StackLaunchApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .onOpenURL { url in
                     handleIncomingURL(url)
                 }
+                .onAppear {
+                    checkPendingLaunch()
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    if newPhase == .active {
+                        checkPendingLaunch()
+                    }
+                }
+        }
+    }
+
+    private func checkPendingLaunch() {
+        guard let defaults = AppGroupHelper.sharedDefaults else { return }
+        let pendingURLString = defaults.string(forKey: "pendingLaunchURL")
+        let pendingBundle = defaults.string(forKey: "pendingLaunchBundleID")
+        if pendingURLString != nil || pendingBundle != nil {
+            defaults.removeObject(forKey: "pendingLaunchURL")
+            defaults.removeObject(forKey: "pendingLaunchBundleID")
+            defaults.synchronize()
+
+            AppGroupLogger.log("APP: Traitement d'un lancement différé -> Bundle: '\(pendingBundle ?? "nil")', URL: '\(pendingURLString ?? "nil")'")
+            var candidateURL: URL? = nil
+            if let pendingURLString, let url = URL(string: pendingURLString) {
+                candidateURL = url
+            }
+            NativeAppLauncher.openApp(bundleIdentifier: pendingBundle, fallbackURL: candidateURL)
         }
     }
 

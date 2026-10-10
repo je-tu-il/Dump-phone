@@ -21,7 +21,9 @@
 		<string>clock-alarm</string>
 		<string>maps</string>
 		<string>sms</string>
+		<string>messages</string>
 		<string>tel</string>
+		<string>mobilephone-recents</string>
 		<string>mailto</string>
 		<string>camera</string>
 		<string>photos-redirect</string>

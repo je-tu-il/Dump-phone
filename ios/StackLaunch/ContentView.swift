@@ -186,6 +186,8 @@ private struct ConfigurationRow: View {
                     .foregroundStyle(.white)
 
                 HStack(spacing: 6) {
+                    Text(configuration.formatSize.shortName)
+                    Text("•")
                     Text("\(configuration.applications.count) apps")
                     Text("•")
                     Text("affiche \(configuration.itemLimit)")
@@ -246,7 +248,20 @@ struct ConfigurationEditor: View {
                     .submitLabel(.done)
                     .onSubmit { isNameFocused = false }
 
-                Stepper(value: $draft.itemLimit, in: 1...maxAppsPerStack) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Format du widget")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Picker("Format du widget", selection: $draft.formatSize) {
+                        ForEach(WidgetFormatSize.allCases) { format in
+                            Text(format.title).tag(format)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                .padding(.vertical, 2)
+
+                Stepper(value: $draft.itemLimit, in: 1...draft.formatSize.maxApps) {
                     HStack {
                         Text("Nombre d'apps affichées :")
                         Spacer()
@@ -279,19 +294,19 @@ struct ConfigurationEditor: View {
                     showingAddFromLibrary = true
                 } label: {
                     Label(
-                        draft.applicationIds.count >= maxAppsPerStack ? "Pile complète (10 max)" : "Ajouter depuis la bibliothèque",
+                        draft.applicationIds.count >= draft.formatSize.maxApps ? "Pile complète (\(draft.formatSize.maxApps) max)" : "Ajouter depuis la bibliothèque",
                         systemImage: "square.grid.3x3.fill"
                     )
                 }
-                .disabled(draft.applicationIds.count >= maxAppsPerStack)
+                .disabled(draft.applicationIds.count >= draft.formatSize.maxApps)
 
                 Button {
                     showingAddFromCatalog = true
                 } label: {
                     Label("Ajouter directement depuis le catalogue", systemImage: "sparkles")
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(draft.applicationIds.count >= draft.formatSize.maxApps ? .gray : .cyan)
                 }
-                .disabled(draft.applicationIds.count >= maxAppsPerStack)
+                .disabled(draft.applicationIds.count >= draft.formatSize.maxApps)
 
                 if draft.applications.isEmpty {
                     Text("Aucune application dans cette pile. Ajoutez-en depuis la bibliothèque ou le catalogue.")
@@ -314,7 +329,7 @@ struct ConfigurationEditor: View {
                     }
                 }
             } header: {
-                Text("Applications incluses (\(draft.applications.count)/\(maxAppsPerStack))")
+                Text("Applications incluses (\(draft.applications.count)/\(draft.formatSize.maxApps))")
             } footer: {
                 Text("Faites glisser pour réordonner les applications. Les premières apparaîtront en priorité sur le widget.")
             }
@@ -326,7 +341,7 @@ struct ConfigurationEditor: View {
         }
         .sheet(isPresented: $showingAddFromLibrary) {
             AddFromLibraryView(store: store, selectedIds: Set(draft.applicationIds)) { app in
-                guard draft.applicationIds.count < maxAppsPerStack else { return }
+                guard draft.applicationIds.count < draft.formatSize.maxApps else { return }
                 draft.applicationIds.append(app.id)
                 draft.applications.append(app)
                 persist()
@@ -334,7 +349,7 @@ struct ConfigurationEditor: View {
         }
         .sheet(isPresented: $showingAddFromCatalog) {
             CatalogBrowserView(store: store) { app in
-                guard draft.applicationIds.count < maxAppsPerStack else { return }
+                guard draft.applicationIds.count < draft.formatSize.maxApps else { return }
                 store.addToLibrary(app)
                 if !draft.applicationIds.contains(app.id) {
                     draft.applicationIds.append(app.id)
@@ -344,6 +359,14 @@ struct ConfigurationEditor: View {
             }
         }
         .onChange(of: draft.name) { _, _ in persist() }
+        .onChange(of: draft.formatSize) { _, newFormat in
+            if draft.applicationIds.count > newFormat.maxApps {
+                draft.applicationIds = Array(draft.applicationIds.prefix(newFormat.maxApps))
+                draft.applications = Array(draft.applications.prefix(newFormat.maxApps))
+            }
+            draft.itemLimit = min(draft.itemLimit, newFormat.maxApps)
+            persist()
+        }
         .onChange(of: draft.itemLimit) { _, _ in persist() }
         .onChange(of: draft.textAlignment) { _, _ in persist() }
         .onChange(of: draft.showIcon) { _, _ in persist() }
@@ -362,19 +385,31 @@ struct ConfigurationEditor: View {
 // MARK: - Carte d'Aperçu en Direct du Widget
 private struct LiveWidgetPreviewCard: View {
     let configuration: WidgetConfigurationList
-    @State private var previewSize: Int = 1 // 0 = Petit, 1 = Moyen
+    @State private var previewSize: Int
+
+    init(configuration: WidgetConfigurationList) {
+        self.configuration = configuration
+        let initialSize: Int
+        switch configuration.formatSize {
+        case .small: initialSize = 0
+        case .medium: initialSize = 1
+        case .large: initialSize = 2
+        }
+        _previewSize = State(initialValue: initialSize)
+    }
 
     var body: some View {
         VStack(spacing: 12) {
             Picker("Taille d'aperçu", selection: $previewSize) {
-                Text("Petit (Small)").tag(0)
-                Text("Moyen (Medium)").tag(1)
+                Text("Petit (4)").tag(0)
+                Text("Rectangle (8)").tag(1)
+                Text("Méga (16)").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
 
             if previewSize == 0 {
-                // Aperçu Small
+                // Aperçu Small (Petit - 4 max)
                 ZStack {
                     RoundedRectangle(cornerRadius: 22)
                         .fill(Color(hex: configuration.backgroundColorHex))
@@ -447,8 +482,8 @@ private struct LiveWidgetPreviewCard: View {
                     .frame(width: 155, height: 155)
                 }
                 .padding(.vertical, 4)
-            } else {
-                // Aperçu Medium
+            } else if previewSize == 1 {
+                // Aperçu Medium (Rectangle - 8 max)
                 ZStack {
                     RoundedRectangle(cornerRadius: 22)
                         .fill(Color(hex: configuration.backgroundColorHex))
@@ -468,7 +503,7 @@ private struct LiveWidgetPreviewCard: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        let apps = configuration.visibleApplications
+                        let apps = Array(configuration.visibleApplications.prefix(8))
                         if apps.isEmpty {
                             Spacer()
                             Text("Aucune application sélectionnée")
@@ -505,9 +540,74 @@ private struct LiveWidgetPreviewCard: View {
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 4)
+            } else {
+                // Aperçu Large (Méga - 16 max)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 22)
+                        .fill(Color(hex: configuration.backgroundColorHex))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 260)
+                        .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(configuration.name.isEmpty ? "Pile" : configuration.name)
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(.cyan)
+                                .lineLimit(1)
+                            Spacer()
+                            Text("\(configuration.visibleApplications.count) apps")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        let apps = Array(configuration.visibleApplications.prefix(16))
+                        if apps.isEmpty {
+                            Spacer()
+                            Text("Aucune application configurée")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                                .frame(maxWidth: .infinity)
+                            Spacer()
+                        } else {
+                            let columns = [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)]
+                            LazyVGrid(columns: columns, spacing: 4) {
+                                ForEach(apps) { app in
+                                    HStack(spacing: 6) {
+                                        if configuration.showIcon {
+                                            Image(systemName: app.symbolName.isEmpty ? "app.fill" : app.symbolName)
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(.cyan)
+                                        }
+                                        Text(app.displayName)
+                                            .font(.system(size: 9, weight: .semibold))
+                                            .foregroundStyle(Color(hex: app.textColorHex))
+                                            .lineLimit(1)
+                                        Spacer(minLength: 0)
+                                    }
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 4)
+                                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.12)))
+                                }
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(12)
+                    .frame(height: 260)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 4)
             }
         }
         .padding(.vertical, 10)
+        .onChange(of: configuration.formatSize) { _, newFormat in
+            switch newFormat {
+            case .small: previewSize = 0
+            case .medium: previewSize = 1
+            case .large: previewSize = 2
+            }
+        }
     }
 }
 
@@ -570,14 +670,9 @@ struct CatalogBrowserView: View {
                                     .foregroundStyle(.cyan)
                             }
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(predefined.name)
-                                    .font(.body.weight(.medium))
-                                    .foregroundStyle(.white)
-                                Text(predefined.urlScheme)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text(predefined.name)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(.white)
 
                             Spacer()
 
@@ -849,14 +944,9 @@ private struct AddFromLibraryView: View {
                         HStack(spacing: 12) {
                             AppIconPreview(app: app)
                                 .frame(width: 32, height: 32)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(app.displayName)
-                                    .font(.body.weight(.medium))
-                                    .foregroundStyle(.white)
-                                Text(app.urlScheme)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text(app.displayName)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(.white)
                             Spacer()
                             Image(systemName: isSelected ? "checkmark.circle.fill" : "plus.circle")
                                 .foregroundStyle(isSelected ? .gray : .cyan)
@@ -998,15 +1088,9 @@ private struct SelectedApplicationRow: View {
         HStack(spacing: 12) {
             AppIconPreview(app: app)
                 .frame(width: 32, height: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(app.displayName)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(textColor)
-                Text(app.urlScheme)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            Text(app.displayName)
+                .font(.body.weight(.medium))
+                .foregroundStyle(textColor)
             Spacer()
             ColorPicker("Couleur texte", selection: $textColor, supportsOpacity: false)
                 .labelsHidden()

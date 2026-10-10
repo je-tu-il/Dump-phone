@@ -1,3 +1,4 @@
+import AppIntents
 import Combine
 import Foundation
 import ImageIO
@@ -10,7 +11,40 @@ public let defaultAppGroupIdentifier = "group.app.rork.7xhlz1b8jysl5d26x7cks.sta
 public let widgetConfigurationsKey = "widgetConfigurations"
 public let appLibraryKey = "globalAppLibrary"
 public let snapshotFileName = "stacklaunch_data.json"
-public let maxAppsPerStack = 10
+public let maxAppsPerStack = 16
+
+// MARK: - Formats de Widget et Limites d'Applications
+public enum WidgetFormatSize: String, Codable, CaseIterable, Identifiable, Sendable {
+    case small = "small"       // Petit: 4 max
+    case medium = "medium"     // Rectangle: 8 max
+    case large = "large"       // Méga: 16 max
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .small: return "Petit (4 max)"
+        case .medium: return "Rectangle (8 max)"
+        case .large: return "Méga (16 max)"
+        }
+    }
+
+    public var shortName: String {
+        switch self {
+        case .small: return "Petit"
+        case .medium: return "Rectangle"
+        case .large: return "Méga"
+        }
+    }
+
+    public var maxApps: Int {
+        switch self {
+        case .small: return 4
+        case .medium: return 8
+        case .large: return 16
+        }
+    }
+}
 
 // MARK: - Résolveur dynamique d'App Group
 public enum AppGroupHelper {
@@ -162,8 +196,12 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
         var trimmed = urlScheme.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         let lower = trimmed.lowercased()
+        // Messages: ouvrir l'application Messages directement sans écran de rédaction
+        if lower.starts(with: "sms") || lower.starts(with: "messages") {
+            trimmed = "messages://"
+        }
         // Mail: ouvrir la boîte de réception sans feuille de rédaction
-        if lower.starts(with: "mailto") {
+        else if lower.starts(with: "mailto") {
             trimmed = "message://"
         }
         // Téléphone: ouvrir le journal d'appels directement sans invite d'appel
@@ -201,7 +239,7 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
     public static func inferBundleIdentifier(fromScheme scheme: String) -> String? {
         let clean = scheme.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         if clean.starts(with: "tel") || clean.starts(with: "mobilephone") { return "com.apple.mobilephone" }
-        if clean.starts(with: "sms") { return "com.apple.MobileSMS" }
+        if clean.starts(with: "sms") || clean.starts(with: "messages") { return "com.apple.MobileSMS" }
         if clean.starts(with: "message") || clean.starts(with: "mailto") { return "com.apple.mobilemail" }
         if clean.starts(with: "photos") { return "com.apple.mobileslideshow" }
         if clean.starts(with: "safari") || clean.starts(with: "x-web-search") { return "com.apple.mobilesafari" }
@@ -260,11 +298,28 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
 
 // MARK: - Lanceur d'applications natif (Supporte l'ouverture directe sans invite d'action)
 public enum NativeAppLauncher {
+    private static var lastLaunchTime: Date = .distantPast
+    private static var lastLaunchTarget: String = ""
+
     public static func openApp(bundleIdentifier: String?, fallbackURL: URL?) {
+        let targetKey = "\(bundleIdentifier ?? "")_\(fallbackURL?.absoluteString ?? "")"
+        let now = Date()
+        if targetKey == lastLaunchTarget && now.timeIntervalSince(lastLaunchTime) < 0.8 {
+            AppGroupLogger.log("LAUNCHER: Ignoré car doublon rapide (< 0.8s)")
+            return
+        }
+        lastLaunchTime = now
+        lastLaunchTarget = targetKey
+
         AppGroupLogger.log("LAUNCHER: Ouverture demandée -> BundleID: '\(bundleIdentifier ?? "nil")' | URL: '\(fallbackURL?.absoluteString ?? "nil")'")
 
         var finalURL = fallbackURL
-        if let scheme = finalURL?.scheme?.lowercased() {
+        let resolvedBundle = bundleIdentifier ?? (finalURL?.scheme.flatMap { LauncherApplication.inferBundleIdentifier(fromScheme: $0) })
+
+        // Messages: redirection propre vers messages:// ou LSApplicationWorkspace pour éviter le brouillon
+        if resolvedBundle == "com.apple.MobileSMS" || finalURL?.scheme?.lowercased() == "sms" {
+            finalURL = URL(string: "messages://")
+        } else if let scheme = finalURL?.scheme?.lowercased() {
             if scheme == "mailto" {
                 finalURL = URL(string: "message://")
             } else if scheme == "tel" || scheme == "tel:" {
@@ -280,7 +335,7 @@ public enum NativeAppLauncher {
                     AppGroupLogger.log("LAUNCHER: Résultat UIApplication.open -> \(success ? "Succès" : "Échec")")
                     if !success {
                         // 2. Si l'URL scheme n'a pas pu s'ouvrir, tenter via le workspace natif
-                        fallbackToWorkspace(bundleIdentifier: bundleIdentifier, fallbackURL: url)
+                        fallbackToWorkspace(bundleIdentifier: resolvedBundle, fallbackURL: url)
                     }
                 }
             }
@@ -288,7 +343,7 @@ public enum NativeAppLauncher {
         }
 
         // 2. Si aucune URL n'est disponible, tenter directement via LSApplicationWorkspace
-        fallbackToWorkspace(bundleIdentifier: bundleIdentifier, fallbackURL: nil)
+        fallbackToWorkspace(bundleIdentifier: resolvedBundle, fallbackURL: nil)
     }
 
     private static func fallbackToWorkspace(bundleIdentifier: String?, fallbackURL: URL?) {
@@ -301,12 +356,32 @@ public enum NativeAppLauncher {
 
         guard let bundleID = resolvedBundleID, !bundleID.isEmpty else { return }
 
+        // Si Messages ou app système: tenter d'abord SpringBoardServices
+        if launchViaSpringBoard(bundleID: bundleID) {
+            AppGroupLogger.log("LAUNCHER: Succès via SpringBoardServices pour \(bundleID)")
+            return
+        }
+
         if openViaWorkspace(bundleID: bundleID) {
             AppGroupLogger.log("LAUNCHER: Succès via LSApplicationWorkspace pour \(bundleID)")
             suspendCurrentApp()
         } else {
             AppGroupLogger.log("LAUNCHER: Échec via LSApplicationWorkspace pour \(bundleID)")
         }
+    }
+
+    private static func launchViaSpringBoard(bundleID: String) -> Bool {
+        guard let handle = dlopen("/System/Library/PrivateFrameworks/SpringBoardServices.framework/SpringBoardServices", RTLD_NOW) else {
+            return false
+        }
+        defer { dlclose(handle) }
+        guard let sym = dlsym(handle, "SBSLaunchApplicationWithIdentifier") else {
+            return false
+        }
+        typealias SBSLaunchFn = @convention(c) (CFString, DarwinBoolean) -> Int32
+        let fn = unsafeBitCast(sym, to: SBSLaunchFn.self)
+        let result = fn(bundleID as CFString, false)
+        return result == 0
     }
 
     public static func suspendCurrentApp() {
@@ -345,10 +420,46 @@ public enum NativeAppLauncher {
     }
 }
 
+// MARK: - AppIntent pour lancer une application depuis le Widget
+public struct LaunchAppIntent: AppIntent {
+    public static var title: LocalizedStringResource = "Ouvrir l'application"
+    public static var description = IntentDescription("Ouvre l'application sélectionnée depuis le widget.")
+    public static var openAppWhenRun: Bool = true
+
+    @Parameter(title: "URL Cible")
+    public var targetURLString: String?
+
+    @Parameter(title: "Bundle ID")
+    public var bundleID: String?
+
+    @Parameter(title: "Nom de l'application")
+    public var appName: String?
+
+    public init() {}
+
+    public init(targetURLString: String?, bundleID: String?, appName: String?) {
+        self.targetURLString = targetURLString
+        self.bundleID = bundleID
+        self.appName = appName
+    }
+
+    @MainActor
+    public func perform() async throws -> some IntentResult {
+        AppGroupLogger.log("INTENT: LaunchAppIntent perform() -> app: '\(appName ?? "inconnu")', bundle: '\(bundleID ?? "nil")', url: '\(targetURLString ?? "nil")'")
+        var candidateURL: URL? = nil
+        if let targetURLString, let url = URL(string: targetURLString) {
+            candidateURL = url
+        }
+        NativeAppLauncher.openApp(bundleIdentifier: bundleID, fallbackURL: candidateURL)
+        return .result()
+    }
+}
+
 // MARK: - Modèle de Pile de Widget
 public struct WidgetConfigurationList: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var name: String
+    public var formatSize: WidgetFormatSize
     public var applicationIds: [UUID]
     public var applications: [LauncherApplication]
     public var itemLimit: Int
@@ -360,9 +471,10 @@ public struct WidgetConfigurationList: Codable, Identifiable, Hashable, Sendable
     public init(
         id: UUID = UUID(),
         name: String,
+        formatSize: WidgetFormatSize = .small,
         applicationIds: [UUID] = [],
         applications: [LauncherApplication] = [],
-        itemLimit: Int = 4,
+        itemLimit: Int? = nil,
         textAlignment: TextAlignmentOption = .leading,
         showIcon: Bool = true,
         backgroundColorHex: String = "#07131F",
@@ -370,18 +482,54 @@ public struct WidgetConfigurationList: Codable, Identifiable, Hashable, Sendable
     ) {
         self.id = id
         self.name = name
+        self.formatSize = formatSize
         let resolvedAppIds = applicationIds.isEmpty ? applications.map(\.id) : applicationIds
         self.applicationIds = resolvedAppIds
         self.applications = applications
-        self.itemLimit = min(max(1, itemLimit), maxAppsPerStack)
+        let limit = itemLimit ?? formatSize.maxApps
+        self.itemLimit = min(max(1, limit), formatSize.maxApps)
         self.textAlignment = textAlignment
         self.showIcon = showIcon
         self.backgroundColorHex = backgroundColorHex
         self.iconStyle = iconStyle
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, formatSize, applicationIds, applications, itemLimit, textAlignment, showIcon, backgroundColorHex, iconStyle
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        let decodedLimit = try container.decodeIfPresent(Int.self, forKey: .itemLimit)
+        if let decodedFormat = try container.decodeIfPresent(WidgetFormatSize.self, forKey: .formatSize) {
+            self.formatSize = decodedFormat
+        } else {
+            if let limit = decodedLimit, limit > 8 {
+                self.formatSize = .large
+            } else if let limit = decodedLimit, limit > 4 {
+                self.formatSize = .medium
+            } else {
+                self.formatSize = .small
+            }
+        }
+        self.applicationIds = try container.decodeIfPresent([UUID].self, forKey: .applicationIds) ?? []
+        self.applications = try container.decodeIfPresent([LauncherApplication].self, forKey: .applications) ?? []
+        let rawLimit = decodedLimit ?? self.formatSize.maxApps
+        self.itemLimit = min(max(1, rawLimit), self.formatSize.maxApps)
+        self.textAlignment = try container.decodeIfPresent(TextAlignmentOption.self, forKey: .textAlignment) ?? .leading
+        self.showIcon = try container.decodeIfPresent(Bool.self, forKey: .showIcon) ?? true
+        self.backgroundColorHex = try container.decodeIfPresent(String.self, forKey: .backgroundColorHex) ?? "#07131F"
+        self.iconStyle = try container.decodeIfPresent(IconStyle.self, forKey: .iconStyle) ?? .standard
+    }
     
+    public var maxApps: Int {
+        formatSize.maxApps
+    }
+
     public var visibleApplications: [LauncherApplication] {
-        let count = min(maxAppsPerStack, max(1, itemLimit))
+        let count = min(maxApps, max(1, itemLimit))
         return Array(applications.prefix(count))
     }
 
@@ -389,6 +537,7 @@ public struct WidgetConfigurationList: Codable, Identifiable, Hashable, Sendable
         let defaults = PredefinedAppsDatabase.defaultFavorites
         return WidgetConfigurationList(
             name: "Favoris",
+            formatSize: .small,
             applicationIds: defaults.map(\.id),
             applications: defaults,
             itemLimit: 4,
@@ -692,6 +841,7 @@ public final class SharedConfigurationStore: ObservableObject {
         let selected = Array(library.prefix(4))
         let newConfig = WidgetConfigurationList(
             name: "Nouvelle pile \(configurations.count + 1)",
+            formatSize: .small,
             applicationIds: selected.map(\.id),
             applications: selected,
             itemLimit: 4,
@@ -704,7 +854,7 @@ public final class SharedConfigurationStore: ObservableObject {
     public func update(_ configuration: WidgetConfigurationList) {
         if let index = configurations.firstIndex(where: { $0.id == configuration.id }) {
             var copy = configuration
-            copy.applicationIds = Array(copy.applicationIds.prefix(maxAppsPerStack))
+            copy.applicationIds = Array(copy.applicationIds.prefix(copy.formatSize.maxApps))
             
             // Si applications est vide mais qu'on a des applicationIds, résorber depuis la bibliothèque
             if copy.applications.isEmpty && !copy.applicationIds.isEmpty {
@@ -717,6 +867,8 @@ public final class SharedConfigurationStore: ObservableObject {
                     copy.applications.first(where: { $0.id == id }) ?? library.first(where: { $0.id == id })
                 }
             }
+            copy.applications = Array(copy.applications.prefix(copy.formatSize.maxApps))
+            copy.itemLimit = min(max(1, copy.itemLimit), copy.formatSize.maxApps)
             
             configurations[index] = copy
             save()
