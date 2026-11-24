@@ -4,10 +4,16 @@ import UIKit
 @main
 struct StackLaunchApp: App {
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showLaunchFailure = false
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .alert("Impossible d’ouvrir ce raccourci", isPresented: $showLaunchFailure) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text("Vérifiez que l’application est installée et que son lien est valide.")
+                }
                 .onOpenURL { url in
                     handleIncomingURL(url)
                 }
@@ -29,55 +35,20 @@ struct StackLaunchApp: App {
         if pendingURLString != nil || pendingBundle != nil {
             defaults.removeObject(forKey: "pendingLaunchURL")
             defaults.removeObject(forKey: "pendingLaunchBundleID")
-            defaults.synchronize()
-
-            AppGroupLogger.log("APP: Traitement d'un lancement différé -> Bundle: '\(pendingBundle ?? "nil")', URL: '\(pendingURLString ?? "nil")'")
-            var candidateURL: URL? = nil
-            if let pendingURLString, let url = URL(string: pendingURLString) {
-                candidateURL = url
-            }
-            NativeAppLauncher.openApp(bundleIdentifier: pendingBundle, fallbackURL: candidateURL)
+            open(bundle: pendingBundle, url: pendingURLString.flatMap { URL(string: $0) })
         }
     }
 
+
     private func handleIncomingURL(_ url: URL) {
-        AppGroupLogger.log("APP onOpenURL: \(url.absoluteString)")
-        guard url.scheme == "stacklaunch" else { return }
+        guard url.scheme?.lowercased() == "stacklaunch", url.host == "launch",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+        let rawTarget = components.queryItems?.first(where: { $0.name == "url" })?.value
+        let bundle = components.queryItems?.first(where: { $0.name == "bundle" })?.value
+        open(bundle: bundle, url: rawTarget.flatMap { URL(string: $0) })
+    }
 
-        var rawTarget: String?
-        var bundleId: String?
-
-        if let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            rawTarget = components.queryItems?.first(where: { $0.name == "url" })?.value
-            bundleId = components.queryItems?.first(where: { $0.name == "bundle" })?.value
-        }
-        
-        // Extraction de secours si URLComponents échoue sur un format complexe
-        if rawTarget == nil {
-            if let range = url.absoluteString.range(of: "url=") {
-                let suffix = String(url.absoluteString[range.upperBound...])
-                let part = suffix.components(separatedBy: "&").first ?? suffix
-                rawTarget = part.removingPercentEncoding ?? part
-            }
-        }
-        if bundleId == nil {
-            if let range = url.absoluteString.range(of: "bundle=") {
-                let suffix = String(url.absoluteString[range.upperBound...])
-                let part = suffix.components(separatedBy: "&").first ?? suffix
-                bundleId = part.removingPercentEncoding ?? part
-            }
-        }
-
-        var candidateURL: URL? = nil
-        if let targetString = rawTarget?.trimmingCharacters(in: .whitespacesAndNewlines), !targetString.isEmpty {
-            var formatted = targetString
-            if !formatted.contains("://") && !formatted.contains(":") {
-                formatted = "\(formatted)://"
-            }
-            candidateURL = URL(string: formatted)
-        }
-
-        // Lancement immédiat ultra-rapide sans délai d'animation
-        NativeAppLauncher.openApp(bundleIdentifier: bundleId, fallbackURL: candidateURL)
+    private func open(bundle: String?, url: URL?) {
+        NativeAppLauncher.openApp(bundleIdentifier: bundle, fallbackURL: url) { showLaunchFailure = true }
     }
 }

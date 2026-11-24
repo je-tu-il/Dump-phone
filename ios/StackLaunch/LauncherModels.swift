@@ -2,7 +2,6 @@ import AppIntents
 import Combine
 import Foundation
 import ImageIO
-import ObjectiveC
 import SwiftUI
 import UIKit
 import WidgetKit
@@ -296,127 +295,31 @@ public struct LauncherApplication: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-// MARK: - Lanceur d'applications natif (Supporte l'ouverture directe sans invite d'action)
+// MARK: - Ouverture par URL publique
+@MainActor
 public enum NativeAppLauncher {
-    private static var lastLaunchTime: Date = .distantPast
-    private static var lastLaunchTarget: String = ""
+    private static var lastURL: URL?
+    private static var lastLaunchTime = Date.distantPast
 
-    public static func openApp(bundleIdentifier: String?, fallbackURL: URL?) {
-        let targetKey = "\(bundleIdentifier ?? "")_\(fallbackURL?.absoluteString ?? "")"
+    public static func openApp(bundleIdentifier: String?, fallbackURL: URL?,
+                               onFailure: @escaping @MainActor @Sendable () -> Void = {}) {
+        let knownURL = PredefinedAppsDatabase.all.first(where: {
+            bundleIdentifier != nil && $0.bundleIdentifier == bundleIdentifier
+        }).flatMap { URL(string: $0.urlScheme) }
+        guard let target = fallbackURL ?? knownURL,
+              let scheme = target.scheme?.lowercased(),
+              !["stacklaunch", "file", "javascript", "data", "prefs", "app-prefs"].contains(scheme) else {
+            onFailure()
+            return
+        }
+
         let now = Date()
-        if targetKey == lastLaunchTarget && now.timeIntervalSince(lastLaunchTime) < 0.8 {
-            AppGroupLogger.log("LAUNCHER: Ignoré car doublon rapide (< 0.8s)")
-            return
-        }
+        guard target != lastURL || now.timeIntervalSince(lastLaunchTime) >= 0.8 else { return }
+        lastURL = target
         lastLaunchTime = now
-        lastLaunchTarget = targetKey
-
-        AppGroupLogger.log("LAUNCHER: Ouverture demandée -> BundleID: '\(bundleIdentifier ?? "nil")' | URL: '\(fallbackURL?.absoluteString ?? "nil")'")
-
-        var finalURL = fallbackURL
-        let resolvedBundle = bundleIdentifier ?? (finalURL?.scheme.flatMap { LauncherApplication.inferBundleIdentifier(fromScheme: $0) })
-
-        // Messages: redirection propre vers messages:// ou LSApplicationWorkspace pour éviter le brouillon
-        if resolvedBundle == "com.apple.MobileSMS" || finalURL?.scheme?.lowercased() == "sms" {
-            finalURL = URL(string: "messages://")
-        } else if let scheme = finalURL?.scheme?.lowercased() {
-            if scheme == "mailto" {
-                finalURL = URL(string: "message://")
-            } else if scheme == "tel" || scheme == "tel:" {
-                finalURL = URL(string: "mobilephone-recents://")
-            }
+        UIApplication.shared.open(target, options: [:]) { success in
+            if !success { onFailure() }
         }
-
-        // 1. Priorité absolue: UIApplication.shared.open (transition directe ultra-rapide par SpringBoard)
-        if let url = finalURL {
-            AppGroupLogger.log("LAUNCHER: Ouverture via UIApplication.open pour \(url.absoluteString)")
-            DispatchQueue.main.async {
-                UIApplication.shared.open(url, options: [:]) { success in
-                    AppGroupLogger.log("LAUNCHER: Résultat UIApplication.open -> \(success ? "Succès" : "Échec")")
-                    if !success {
-                        // 2. Si l'URL scheme n'a pas pu s'ouvrir, tenter via le workspace natif
-                        fallbackToWorkspace(bundleIdentifier: resolvedBundle, fallbackURL: url)
-                    }
-                }
-            }
-            return
-        }
-
-        // 2. Si aucune URL n'est disponible, tenter directement via LSApplicationWorkspace
-        fallbackToWorkspace(bundleIdentifier: resolvedBundle, fallbackURL: nil)
-    }
-
-    private static func fallbackToWorkspace(bundleIdentifier: String?, fallbackURL: URL?) {
-        var resolvedBundleID = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if resolvedBundleID == nil || resolvedBundleID!.isEmpty {
-            if let scheme = fallbackURL?.scheme {
-                resolvedBundleID = LauncherApplication.inferBundleIdentifier(fromScheme: scheme)
-            }
-        }
-
-        guard let bundleID = resolvedBundleID, !bundleID.isEmpty else { return }
-
-        // Si Messages ou app système: tenter d'abord SpringBoardServices
-        if launchViaSpringBoard(bundleID: bundleID) {
-            AppGroupLogger.log("LAUNCHER: Succès via SpringBoardServices pour \(bundleID)")
-            return
-        }
-
-        if openViaWorkspace(bundleID: bundleID) {
-            AppGroupLogger.log("LAUNCHER: Succès via LSApplicationWorkspace pour \(bundleID)")
-            suspendCurrentApp()
-        } else {
-            AppGroupLogger.log("LAUNCHER: Échec via LSApplicationWorkspace pour \(bundleID)")
-        }
-    }
-
-    private static func launchViaSpringBoard(bundleID: String) -> Bool {
-        guard let handle = dlopen("/System/Library/PrivateFrameworks/SpringBoardServices.framework/SpringBoardServices", RTLD_NOW) else {
-            return false
-        }
-        defer { dlclose(handle) }
-        guard let sym = dlsym(handle, "SBSLaunchApplicationWithIdentifier") else {
-            return false
-        }
-        typealias SBSLaunchFn = @convention(c) (CFString, DarwinBoolean) -> Int32
-        let fn = unsafeBitCast(sym, to: SBSLaunchFn.self)
-        let result = fn(bundleID as CFString, false)
-        return result == 0
-    }
-
-    public static func suspendCurrentApp() {
-        let suspendSel = NSSelectorFromString("suspend")
-        DispatchQueue.main.async {
-            if UIApplication.shared.responds(to: suspendSel) {
-                _ = UIApplication.shared.perform(suspendSel)
-            }
-            UIApplication.shared.sendAction(suspendSel, to: UIApplication.shared, from: nil, for: nil)
-        }
-    }
-
-    private static func openViaWorkspace(bundleID: String) -> Bool {
-        guard let workspaceClass = NSClassFromString("LSApplicationWorkspace") as? NSObject.Type else {
-            return false
-        }
-        let defaultWorkspaceSel = NSSelectorFromString("defaultWorkspace")
-        guard workspaceClass.responds(to: defaultWorkspaceSel),
-              let workspace = workspaceClass.perform(defaultWorkspaceSel)?.takeUnretainedValue() as? NSObject else {
-            return false
-        }
-        let openAppSel = NSSelectorFromString("openApplicationWithBundleID:")
-        guard let method = class_getInstanceMethod(type(of: workspace), openAppSel) else {
-            if workspace.responds(to: openAppSel) {
-                _ = workspace.perform(openAppSel, with: bundleID)
-                return true
-            }
-            return false
-        }
-        
-        let imp = method_getImplementation(method)
-        typealias OpenAppFn = @convention(c) (AnyObject, Selector, NSString) -> Bool
-        let openApp = unsafeBitCast(imp, to: OpenAppFn.self)
-        let success = openApp(workspace, openAppSel, bundleID as NSString)
-        return success
     }
 }
 
