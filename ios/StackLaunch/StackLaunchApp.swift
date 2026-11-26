@@ -9,6 +9,7 @@ struct StackLaunchApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .tint(Color(red: 0.19, green: 0.37, blue: 0.47))
                 .alert("Impossible d’ouvrir ce raccourci", isPresented: $showLaunchFailure) {
                     Button("OK", role: .cancel) {}
                 } message: {
